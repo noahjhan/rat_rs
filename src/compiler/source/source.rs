@@ -36,31 +36,31 @@ impl RatSource {
         match self.reader.read(&mut byte)? {
             0 => Ok(None),
             _ => {
-                let ch = byte[0];
+                let b = byte[0];
 
                 self.offset += 1;
 
-                if ch == b'\n' {
+                if b == b'\n' {
                     self.line_num += 1;
                     self.col_num = 1;
                 } else {
                     self.col_num += 1;
                 }
 
-                Ok(Some(ch))
+                Ok(Some(b))
             }
         }
     }
 
-    pub fn peek(&mut self, n: usize) -> io::Result<Option<u8>> {
+    pub fn peek(&mut self) -> io::Result<Option<u8>> {
         let buffer = self.reader.fill_buf()?;
-        Ok(buffer.get(n - 1).copied())
+        Ok(buffer.get(0).copied())
     }
 
     pub fn advance_whitespace(&mut self) -> io::Result<bool> {
         let mut is_newline = false;
         loop {
-            match self.peek(1)? {
+            match self.peek()? {
                 None => break,
                 Some(b) => {
                     let ch = b as char;
@@ -74,6 +74,7 @@ impl RatSource {
                 }
             }
         }
+
         Ok(is_newline)
     }
 

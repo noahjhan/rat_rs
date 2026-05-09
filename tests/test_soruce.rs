@@ -16,7 +16,7 @@ fn test_init_file_exists() {
     let actual = source.position();
 
     assert_eq!(
-        actual, expected,
+        expected, actual,
         "Expected init position {:?}, got {:?}",
         expected, actual
     );
@@ -51,6 +51,48 @@ fn test_read_file_exists() {
 
     let actual_pos = source.position();
 
-    assert_eq!(actual_pos, expected_pos);
-    assert_eq!(actual_output, expected_output);
+    assert_eq!(
+        expected_pos, actual_pos,
+        "Read stored incorrect position. Expected {:?} but got {:?}",
+        expected_pos, actual_pos,
+    );
+
+    assert_eq!(
+        expected_output, actual_output,
+        "Read returned incorrect output. Expected {:?} but got {:?}",
+        expected_output, actual_output,
+    );
+}
+
+#[test]
+fn test_peek_file_exists() {
+    let expected_pos = Position {
+        line_num: 2,
+        col_num: 1,
+        offset: 14,
+    };
+    let expected_peek_output = b'b';
+    let mut source = RatSource::init("data/file_exists.txt").unwrap();
+
+    for _ in 0..14 {
+        match source.read().unwrap() {
+            Some(_) => continue,
+            None => break,
+        }
+    }
+
+    let actual_peek_output = source.peek().unwrap().expect("Expected a byte but got EOF");
+
+    assert_eq!(
+        expected_peek_output, actual_peek_output,
+        "Peek returned incorrect output. Expected {:?} but got {:?}",
+        expected_peek_output, actual_peek_output,
+    );
+
+    let actual_pos = source.position();
+    assert_eq!(
+        expected_pos, actual_pos,
+        "Peek stored incorrect position. Expected {:?} but got {:?}",
+        expected_pos, actual_pos,
+    );
 }
