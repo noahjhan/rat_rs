@@ -1,11 +1,11 @@
+use crate::compiler::RatError;
 use std::fs::File;
 use std::io::Read;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader};
 
 #[derive(Debug)]
 pub struct RatSource {
     reader: BufReader<File>,
-
     line_num: usize,
     col_num: usize,
     offset: usize,
@@ -19,9 +19,8 @@ pub struct Position {
 }
 
 impl RatSource {
-    pub fn init(filepath: &str) -> io::Result<Self> {
+    pub fn init(filepath: &str) -> Result<Self, RatError> {
         let file = File::open(filepath)?;
-
         Ok(Self {
             reader: BufReader::new(file),
             line_num: 1,
@@ -30,34 +29,30 @@ impl RatSource {
         })
     }
 
-    pub fn read(&mut self) -> io::Result<Option<u8>> {
+    pub fn read(&mut self) -> Result<Option<u8>, RatError> {
         let mut byte = [0u8; 1];
-
         match self.reader.read(&mut byte)? {
             0 => Ok(None),
             _ => {
                 let b = byte[0];
-
                 self.offset += 1;
-
                 if b == b'\n' {
                     self.line_num += 1;
                     self.col_num = 1;
                 } else {
                     self.col_num += 1;
                 }
-
                 Ok(Some(b))
             }
         }
     }
 
-    pub fn peek(&mut self) -> io::Result<Option<u8>> {
+    pub fn peek(&mut self) -> Result<Option<u8>, RatError> {
         let buffer = self.reader.fill_buf()?;
         Ok(buffer.get(0).copied())
     }
 
-    pub fn advance_whitespace(&mut self) -> io::Result<bool> {
+    pub fn advance_whitespace(&mut self) -> Result<bool, RatError> {
         let mut is_newline = false;
         loop {
             match self.peek()? {
@@ -74,15 +69,14 @@ impl RatSource {
                 }
             }
         }
-
         Ok(is_newline)
     }
 
     pub fn position(&self) -> Position {
-        return Position {
+        Position {
             line_num: self.line_num,
             col_num: self.col_num,
             offset: self.offset,
-        };
+        }
     }
 }
