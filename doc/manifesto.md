@@ -1,6 +1,6 @@
 # Rat_
 
-## features
+## Features
 
 fn -> function
   - pure function

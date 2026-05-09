@@ -3,7 +3,7 @@ use std::io::Read;
 use std::io::{self, BufReader};
 
 #[derive(Debug)]
-pub struct Source {
+pub struct RatSource {
     reader: BufReader<File>,
 
     line_num: usize,
@@ -20,50 +20,43 @@ pub struct Position {
     pub offset: usize,
 }
 
-impl Source {
+impl RatSource {
     // TODO: at runtime set cwd for safer filepath
     pub fn init(filepath: &str) -> io::Result<Self> {
         let file = File::open(filepath)?;
 
         Ok(Self {
             reader: BufReader::new(file),
-            line_num: 0,
-            col_num: 0,
+            line_num: 1,
+            col_num: 1,
             offset: 0,
         })
     }
 
-    // TODO: cleanup
-    pub fn close(&self) {
-        unimplemented!()
-    }
-
     pub fn read(&mut self) -> io::Result<Option<u8>> {
-        let mut buf = [0u8; 1];
+        let mut byte = [0u8; 1];
 
-        let n = self.reader.read(&mut buf)?;
+        match self.reader.read(&mut byte)? {
+            0 => Ok(None),
+            _ => {
+                let ch = byte[0];
 
-        // EOF
-        if n == 0 {
-            return Ok(None);
+                self.offset += 1;
+
+                if ch == b'\n' {
+                    self.line_num += 1;
+                    self.col_num = 1;
+                } else {
+                    self.col_num += 1;
+                }
+
+                Ok(Some(ch))
+            }
         }
-
-        let c = buf[0];
-
-        self.offset += 1;
-
-        if c == b'\n' {
-            self.line_num += 1;
-            self.col_num = 0;
-        } else {
-            self.col_num += 1;
-        }
-
-        Ok(Some(c))
     }
 
     // TODO: peek next character without consuming
-    pub fn peek(&mut self) -> io::Result<Option<char>> {
+    pub fn peek(&mut self) -> io::Result<Option<u8>> {
         unimplemented!()
     }
 

@@ -1,15 +1,15 @@
-use rat::compiler::source::Position;
-use rat::compiler::source::Source;
+use rat::compiler::Position;
+use rat::compiler::RatSource;
 
 #[test]
 fn test_init_file_exists() {
     let expected = Position {
-        line_num: 0,
-        col_num: 0,
+        line_num: 1,
+        col_num: 1,
         offset: 0,
     };
 
-    let result = Source::init("data/file_exists.txt");
+    let result = RatSource::init("data/file_exists.txt");
     assert!(result.is_ok());
 
     let source = result.unwrap();
@@ -24,7 +24,7 @@ fn test_init_file_exists() {
 
 #[test]
 fn test_init_nonexistent_file() {
-    let result = Source::init("data/nonexistent_file.txt");
+    let result = RatSource::init("data/nonexistent_file.txt");
 
     assert!(
         result.is_err(),
@@ -35,14 +35,14 @@ fn test_init_nonexistent_file() {
 #[test]
 fn test_read_file_exists() {
     let expected_pos = Position {
-        line_num: 2,
-        col_num: 0,
+        line_num: 3,
+        col_num: 1,
         offset: 32,
     };
 
     let expected_output = "hello, world.\nbonjour le monde!\n";
 
-    let mut source = Source::init("data/file_exists.txt").unwrap();
+    let mut source = RatSource::init("data/file_exists.txt").unwrap();
     let mut actual_output = String::new();
 
     while let Some(b) = source.read().unwrap() {
