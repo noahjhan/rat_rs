@@ -1,0 +1,26 @@
+Rat_
+
+---------------
+ features
+---------------
+
+fn -> function
+  - pure function
+  - specified return value : ret
+  - second class citizen
+
+fn/ -> lambda function
+  - pure function
+  - specified return value : ret
+  - first class citizen
+
+fn? -> optional function
+  - pure function
+  - nullable return value : ret
+  - first class citizen
+
+fn_ - void function 
+  - pure function
+  - null return value : rev
+  - used for interacting with system calls 
+  - used for main function
