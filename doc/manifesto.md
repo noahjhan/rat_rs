@@ -1,8 +1,6 @@
-Rat_
+# Rat_
 
----------------
- features
----------------
+## features
 
 fn -> function
   - pure function
@@ -19,8 +17,8 @@ fn? -> optional function
   - nullable return value : ret
   - first class citizen
 
-fn_ - void function 
+fn_ -> void function
   - pure function
   - null return value : rev
-  - used for interacting with system calls 
+  - used for interacting with system calls
   - used for main function
