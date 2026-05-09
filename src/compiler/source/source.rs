@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use std::io::{self, BufReader};
+use std::io::{self, BufRead, BufReader};
 
 #[derive(Debug)]
 pub struct RatSource {
@@ -9,8 +9,6 @@ pub struct RatSource {
     line_num: usize,
     col_num: usize,
     offset: usize,
-    // TODO: optional lookahead buffer for peek support
-    // lookahead: Option<char>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +19,6 @@ pub struct Position {
 }
 
 impl RatSource {
-    // TODO: at runtime set cwd for safer filepath
     pub fn init(filepath: &str) -> io::Result<Self> {
         let file = File::open(filepath)?;
 
@@ -55,17 +52,31 @@ impl RatSource {
         }
     }
 
-    // TODO: peek next character without consuming
-    pub fn peek(&mut self) -> io::Result<Option<u8>> {
-        unimplemented!()
+    pub fn peek(&mut self, n: usize) -> io::Result<Option<u8>> {
+        let buffer = self.reader.fill_buf()?;
+        Ok(buffer.get(n - 1).copied())
     }
 
-    // TODO: skip whitespace, track newlines
     pub fn advance_whitespace(&mut self) -> io::Result<bool> {
-        unimplemented!()
+        let mut is_newline = false;
+        loop {
+            match self.peek(1)? {
+                None => break,
+                Some(b) => {
+                    let ch = b as char;
+                    if !ch.is_whitespace() {
+                        break;
+                    }
+                    if ch == '\n' {
+                        is_newline = true;
+                    }
+                    self.read()?;
+                }
+            }
+        }
+        Ok(is_newline)
     }
 
-    // TODO: check current position
     pub fn position(&self) -> Position {
         return Position {
             line_num: self.line_num,

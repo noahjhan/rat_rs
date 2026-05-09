@@ -29,6 +29,7 @@ pub enum ConstituentKeyword {
     Else,
     ElseIf,
     Match,
+    Main,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -88,26 +89,25 @@ pub enum ConstituentOperator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConstituentType {
     Int,
+    Long,
+    Short,
+    Char,
     Float,
     Double,
     Bool,
-    Char,
-    Long,
-    Short,
-    Pointer,
     Uint,
     Ulong,
     Ushort,
     Uchar,
     String,
+    Pointer,
     Void,
-    Main,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub kind: Kind,
-    pub lexeme: String,
+    pub value: String,
     pub line: usize,
     pub col: usize,
     pub offset: usize,
