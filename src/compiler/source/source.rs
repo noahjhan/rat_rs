@@ -52,31 +52,23 @@ impl RatSource {
         Ok(buffer.get(0).copied())
     }
 
-    pub fn advance_whitespace(&mut self) -> Result<bool, RatError> {
-        let mut is_newline = false;
-        loop {
-            match self.peek()? {
-                None => break,
-                Some(b) => {
-                    let ch = b as char;
-                    if !ch.is_whitespace() {
-                        break;
-                    }
-                    if ch == '\n' {
-                        is_newline = true;
-                    }
-                    self.read()?;
-                }
-            }
-        }
-        Ok(is_newline)
-    }
-
     pub fn position(&self) -> Position {
         Position {
             line_num: self.line_num,
             col_num: self.col_num,
             offset: self.offset,
         }
+    }
+
+    pub fn get_line_num(&self) -> usize {
+        self.line_num
+    }
+
+    pub fn get_col_num(&self) -> usize {
+        self.col_num
+    }
+
+    pub fn get_offset(&self) -> usize {
+        self.offset
     }
 }

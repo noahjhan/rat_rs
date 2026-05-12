@@ -1,3 +1,128 @@
+use crate::compiler::Position;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Category {
+    Identifier,
+    Keyword,
+    Literal,
+    Punctuator,
+    Operator,
+    Type,
+    Invalid,
+}
+
+impl Category {
+    fn is_operator(s: &str) -> Option<Self> {
+        matches!(
+            s,
+            "=" | "+"
+                | "-"
+                | "*"
+                | "/"
+                | "%"
+                | "=="
+                | "!="
+                | "<"
+                | ">"
+                | "<="
+                | ">="
+                | "&&"
+                | "||"
+                | "!"
+                | "&"
+                | "|"
+                | "^"
+                | "~"
+                | "<<"
+                | ">>"
+                | "->"
+                | "=>"
+        )
+        .then_some(Category::Operator)
+    }
+
+    fn is_keyword(s: &str) -> Option<Self> {
+        matches!(
+            s,
+            "let"
+                | "op"
+                | "fn"
+                | "fn_"
+                | "fn?"
+                | "fn/"
+                | "ret"
+                | "rev"
+                | "if"
+                | "else"
+                | "else if"
+                | "match"
+                | "main"
+        )
+        .then_some(Category::Keyword)
+    }
+
+    fn is_punctuator(s: &str) -> Option<Self> {
+        matches!(
+            s,
+            ":" | "'" | "\"" | "," | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
+        )
+        .then_some(Category::Punctuator)
+    }
+
+    fn is_type(s: &str) -> Option<Self> {
+        matches!(
+            s,
+            "int"
+                | "float"
+                | "double"
+                | "bool"
+                | "char"
+                | "long"
+                | "short"
+                | "pointer"
+                | "uint"
+                | "ulong"
+                | "ushort"
+                | "uchar"
+                | "string"
+                | "void"
+        )
+        .then_some(Category::Type)
+    }
+
+    // pub fn is_prefix(s: &str) -> bool {
+    //     matches!(
+    //         s,
+    //         "=" | "!"
+    //             | "<"
+    //             | ">"
+    //             | "&"
+    //             | "|"
+    //             | "-"
+    //             | "*"
+    //             | "/"
+    //             | "e"
+    //             | "el"
+    //             | "els"
+    //             | "f"
+    //             | "fn"
+    //             | "r"
+    //             | "re"
+    //     )
+    // }
+    //
+    // pub fn is_none(s: &str) -> bool {
+    //     Self::is_any(s).is_none() && !Self::is_prefix(s)
+    // }
+
+    pub fn is_any(s: &str) -> Option<Self> {
+        Self::is_keyword(s)
+            .or_else(|| Self::is_operator(s))
+            .or_else(|| Self::is_punctuator(s))
+            .or_else(|| Self::is_type(s))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
     Identifier(ConstituentIdentifier),
@@ -104,15 +229,6 @@ pub enum ConstituentType {
     Void,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Token {
-    pub kind: Kind,
-    pub value: String,
-    pub line: usize,
-    pub col: usize,
-    pub offset: usize,
-}
-
 impl Kind {
     pub fn is_identifier(&self) -> bool {
         matches!(self, Kind::Identifier(_))
@@ -142,9 +258,70 @@ impl Kind {
         matches!(self, Kind::Invalid)
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Span {
+    pub start_line_num: usize,
+    pub start_col_num: usize,
+    pub start_offset: usize,
+    pub end_line_num: usize,
+    pub end_col_num: usize,
+    pub end_offset: usize,
+}
+
+impl Span {
+    pub fn set(start: Position, end: Position) -> Self {
+        Span {
+            start_line_num: start.line_num,
+            start_col_num: start.col_num,
+            start_offset: start.offset,
+            end_line_num: end.line_num,
+            end_col_num: end.col_num,
+            end_offset: end.offset,
+        }
+    }
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub struct RawToken {
+//     category: Category,
+//     value: String,
+// }
+//
+// impl RawToken {
+//     pub fn new(category: Category, value: String) -> Self {
+//         RawToken {
+//             category: category,
+//             value: value,
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Token {
+    // pub raw: RawToken,
+    pub category: Category,
+    pub value: String,
+    pub span: Span,
+}
 
 impl Token {
+    // pub fn new(raw: RawToken, span: Span) -> Self {
+    //     Token {
+    //         category: raw.category,
+    //         value: raw.value,
+    //         span: span,
+    //     }
+    // }
+
+    pub fn new(category: Category, value: String, span: Span) -> Self {
+        Token {
+            category: category,
+            value: value,
+            span: span,
+        }
+    }
+
     pub fn is_valid(&self) -> bool {
-        !matches!(self.kind, Kind::Invalid)
+        !matches!(self.category, Category::Invalid)
     }
 }
