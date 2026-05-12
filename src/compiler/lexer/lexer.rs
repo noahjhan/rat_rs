@@ -45,8 +45,8 @@ impl Lexer {
             };
 
             match ch {
-                '\'' => return self.advance_character_literal(start_pos),
                 '\"' => return self.advance_string_literal(start_pos),
+                '\'' => return self.advance_character_literal(start_pos),
                 _ if ch.is_numeric() => return self.advance_numeric_literal(start_pos),
                 _ => {}
             }
@@ -98,8 +98,28 @@ impl Lexer {
     }
 
     fn advance_string_literal(&mut self, start_pos: Position) -> Result<Option<Token>, RatError> {
-        Ok(None)
+        let mut partial = String::new();
+
+        loop {
+            let ch = match self.source.read()? {
+                Some(b) => b as char,
+                None => {
+                    return Err(RatError::LexicalError(String::from(
+                        "missing \'\"\' at the end of string literal",
+                    )))
+                }
+            };
+
+            partial.push(ch);
+
+            if ch == '\"' {
+                let end_pos = self.source.position();
+                let token = Token::new(Category::Literal, partial, Span::set(start_pos, end_pos));
+                return Ok(Some(token));
+            }
+        }
     }
+
     fn advance_character_literal(
         &mut self,
         start_pos: Position,
