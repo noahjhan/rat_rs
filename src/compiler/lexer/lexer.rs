@@ -1,6 +1,6 @@
 use crate::compiler::RatError;
 use crate::compiler::RatSource;
-use crate::compiler::{Category, Span, Token};
+use crate::compiler::{Category, Position, Span, Token};
 
 pub struct Lexer {
     source: RatSource,
@@ -36,6 +36,7 @@ impl Lexer {
         let mut partial = String::new();
 
         loop {
+            // first read a character
             let ch = match self.source.read()? {
                 Some(b) => b as char,
                 None => {
@@ -43,9 +44,17 @@ impl Lexer {
                 }
             };
 
+            match ch {
+                '\'' => return self.advance_character_literal(start_pos),
+                '\"' => return self.advance_string_literal(start_pos),
+                _ if ch.is_numeric() => return self.advance_numeric_literal(start_pos),
+                _ => {}
+            }
+
             partial.push(ch);
 
-            // maximal munch
+            // maximal munch: continue if appending the next character to partial
+            // matches a longer reserved word, continue
             match self.source.peek()? {
                 Some(b) => {
                     let ch = b as char;
@@ -59,6 +68,7 @@ impl Lexer {
                 None => {}
             };
 
+            // if the current partial mathches a reserved word, return it as a token
             match Category::is_any(partial.as_str()) {
                 Some(category) => {
                     let end_pos = self.source.position();
@@ -68,48 +78,37 @@ impl Lexer {
                 None => {}
             };
 
+            // check if next character is a delimter
             match self.source.peek()? {
                 Some(b) => {
                     let ch = b as char;
-                    // check if next character is a delimter
-                    //   e.g., ',' for identifiers , or '+' or ' ' for operators
-                    // if so, break
+                    if Category::is_delimiter(ch) {
+                        let end_pos = self.source.position();
+                        let token = Token::new(
+                            Category::Identifier,
+                            partial,
+                            Span::set(start_pos, end_pos),
+                        );
+                        return Ok(Some(token));
+                    }
                 }
-                None => break,
+                None => return Ok(None),
             }
         }
-
-        Ok(None)
     }
 
-    // fn advance_newline(&mut self) -> Result<Option<Token>, RatError> {
-    //     let start_pos = self.source.position();
-    //
-    //     match self.source.read()? {
-    //         Some(b'\n') => {}
-    //
-    //         Some(ch) => {
-    //             return Err(RatError::InternalError(format!(
-    //                 "Expected newline character in call to advance_newline, received {:?}",
-    //                 ch
-    //             )));
-    //         }
-    //
-    //         None => {
-    //             return Err(RatError::InternalError(String::from(
-    //                 "Expected newline character in call to advance_newline, received EOF",
-    //             )));
-    //         }
-    //     }
-    //
-    //     let end_pos = self.source.position();
-    //
-    //     Ok(Some(Token::new(
-    //         Category::Punctuator,
-    //         String::from("\n"),
-    //         Span::set(start_pos, end_pos),
-    //     )))
-    // }
+    fn advance_string_literal(&mut self, start_pos: Position) -> Result<Option<Token>, RatError> {
+        Ok(None)
+    }
+    fn advance_character_literal(
+        &mut self,
+        start_pos: Position,
+    ) -> Result<Option<Token>, RatError> {
+        Ok(None)
+    }
+    fn advance_numeric_literal(&mut self, start_pos: Position) -> Result<Option<Token>, RatError> {
+        Ok(None)
+    }
 
     fn advance_whitespace(&mut self) -> Result<Option<()>, RatError> {
         loop {
@@ -124,28 +123,5 @@ impl Lexer {
 
             self.source.read()?;
         }
-
-        // loop {
-        //     let Some(b) = self.source.peek()? else {
-        //         return Ok(AdvanceWhitespace::Eof);
-        //     };
-        //
-        //     let ch = b as char;
-        //
-        //     if !ch.is_whitespace() {
-        //         return Ok(AdvanceWhitespace::Continue);
-        //     }
-        //
-        //     let start_pos = self.source.position();
-        //     self.source.read()?;
-        //
-        //     if ch == '\n' {
-        //         let end_pos = self.source.position();
-        //         let span = Span::set(start_pos, end_pos);
-        //         let token = Token::new(Category::Punctuator, String::from(";"), span);
-        //
-        //         return Ok(AdvanceWhitespace::Token(token));
-        //     }
-        // }
     }
 }

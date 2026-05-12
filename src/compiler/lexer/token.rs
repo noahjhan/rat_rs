@@ -12,6 +12,16 @@ pub enum Category {
 }
 
 impl Category {
+    pub fn is_delimiter(ch: char) -> bool {
+        if ch.is_ascii_punctuation() || ch.is_whitespace() {
+            return true;
+        } else if ch.is_ascii() {
+            return false;
+        }
+
+        return true;
+    }
+
     fn is_operator(s: &str) -> Option<Self> {
         matches!(
             s,
