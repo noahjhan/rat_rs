@@ -33,7 +33,7 @@ fn test_init_nonexistent_file() {
 }
 
 #[test]
-fn test_read_file_exists() {
+fn test_read() {
     let expected_pos = Position {
         line_num: 3,
         col_num: 1,
@@ -65,7 +65,7 @@ fn test_read_file_exists() {
 }
 
 #[test]
-fn test_peek_file_exists() {
+fn test_peek() {
     let expected_pos = Position {
         line_num: 2,
         col_num: 1,

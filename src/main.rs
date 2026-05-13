@@ -1,3 +1,5 @@
+use rat::compiler::compile;
+
 fn main() {
     let ascii_ratty = r#"
 
@@ -43,4 +45,7 @@ fn main() {
 
     println!("{}", ascii_ratty);
     println!("bonjour le monde!");
+
+    let filepath = "data/compile.rat";
+    compile(filepath, true);
 }

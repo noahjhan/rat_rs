@@ -6,12 +6,6 @@ pub struct Lexer {
     source: RatSource,
 }
 
-enum AdvanceWhitespace {
-    Token(Token),
-    Continue,
-    Eof,
-}
-
 impl Lexer {
     pub fn init(source: RatSource) -> Self {
         Lexer { source: source }
@@ -19,11 +13,17 @@ impl Lexer {
 
     pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
         match self.source.peek()? {
-            Some(_) => {}
-            None => {
-                return Ok(None);
+            Some(b) => {
+                let ch = b as char;
+                match ch {
+                    '\"' => return self.advance_string_literal(),
+                    '\'' => return self.advance_character_literal(),
+                    _ if ch.is_numeric() => return self.advance_numeric_literal(),
+                    _ => {}
+                }
             }
-        }
+            None => return Ok(None),
+        };
 
         match self.advance_whitespace()? {
             Some(_) => {}
@@ -36,7 +36,6 @@ impl Lexer {
         let mut partial = String::new();
 
         loop {
-            // first read a character
             let ch = match self.source.read()? {
                 Some(b) => b as char,
                 None => {
@@ -44,31 +43,12 @@ impl Lexer {
                 }
             };
 
-            match ch {
-                '\"' => return self.advance_string_literal(start_pos),
-                '\'' => return self.advance_character_literal(start_pos),
-                _ if ch.is_numeric() => return self.advance_numeric_literal(start_pos),
-                _ => {}
-            }
-
             partial.push(ch);
 
-            // maximal munch: continue if appending the next character to partial
-            // matches a longer reserved word, continue
-            match self.source.peek()? {
-                Some(b) => {
-                    let ch = b as char;
-                    let mut extended = partial.clone();
-                    extended.push(ch);
-                    match Category::is_any(extended.as_str()) {
-                        Some(_) => continue,
-                        None => {}
-                    };
-                }
-                None => {}
-            };
+            if self.should_advance(&partial)? {
+                continue;
+            }
 
-            // if the current partial mathches a reserved word, return it as a token
             match Category::is_any(partial.as_str()) {
                 Some(category) => {
                     let end_pos = self.source.position();
@@ -78,7 +58,6 @@ impl Lexer {
                 None => {}
             };
 
-            // check if next character is a delimter
             match self.source.peek()? {
                 Some(b) => {
                     let ch = b as char;
@@ -92,13 +71,34 @@ impl Lexer {
                         return Ok(Some(token));
                     }
                 }
-                None => return Ok(None),
+                None => {
+                    let end_pos = self.source.position();
+                    return Ok(Some(Token::new(
+                        Category::Identifier,
+                        partial,
+                        Span::set(start_pos, end_pos),
+                    )));
+                }
             }
         }
     }
 
-    fn advance_string_literal(&mut self, start_pos: Position) -> Result<Option<Token>, RatError> {
+    fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
+        let start_pos = self.source.position();
+        let mut is_esc_sequence = false;
+
         let mut partial = String::new();
+        match self.source.read()? {
+            Some(b) => {
+                let ch = b as char;
+                partial.push(ch);
+            }
+            None => {
+                return Err(RatError::InternalError(String::from(
+                    "Expected \'\"\', Got EOF",
+                )))
+            }
+        };
 
         loop {
             let ch = match self.source.read()? {
@@ -110,9 +110,40 @@ impl Lexer {
                 }
             };
 
+            if is_esc_sequence {
+                match ch {
+                    '\\' => {}
+                    '\'' => {}
+                    '\"' => {}
+                    'n' => {}
+                    'r' => {}
+                    't' => {}
+                    'b' => {}
+                    '0' => {}
+                    'u' => {
+                        let unicode = self.advance_unicode_escape()?;
+                        partial.push_str(&unicode);
+                        is_esc_sequence = false;
+                        continue;
+                    }
+                    _ => {
+                        return Err(RatError::LexicalError(format!(
+                            "invalid escape sequence: '\\{}'",
+                            ch
+                        )));
+                    }
+                }
+
+                is_esc_sequence = false;
+                partial.push(ch);
+                continue;
+            }
+
             partial.push(ch);
 
-            if ch == '\"' {
+            if ch == '\\' {
+                is_esc_sequence = true;
+            } else if ch == '\"' {
                 let end_pos = self.source.position();
                 let token = Token::new(Category::Literal, partial, Span::set(start_pos, end_pos));
                 return Ok(Some(token));
@@ -120,13 +151,70 @@ impl Lexer {
         }
     }
 
-    fn advance_character_literal(
-        &mut self,
-        start_pos: Position,
-    ) -> Result<Option<Token>, RatError> {
+    fn advance_unicode_escape(&mut self) -> Result<String, RatError> {
+        match self.source.read()? {
+            Some(b) if (b as char) == '{' => {}
+            _ => {
+                return Err(RatError::LexicalError(String::from(
+                    "expected '{' after '\\u' in unicode escape",
+                )));
+            }
+        }
+
+        let mut hex = String::new();
+        loop {
+            match self.source.read()? {
+                Some(b) => {
+                    let hch = b as char;
+                    if hch == '}' {
+                        break;
+                    }
+                    if !hch.is_ascii_hexdigit() {
+                        return Err(RatError::LexicalError(format!(
+                            "invalid hexadecimal digit in unicode escape: '{}'",
+                            hch
+                        )));
+                    }
+                    hex.push(hch);
+                }
+                None => {
+                    return Err(RatError::LexicalError(String::from(
+                        "unterminated unicode escape sequence",
+                    )));
+                }
+            }
+        }
+
+        if hex.is_empty() || hex.len() > 6 {
+            return Err(RatError::LexicalError(format!(
+                "unicode escape must be between 1 and 6 hex digits, got {}",
+                hex.len()
+            )));
+        }
+
+        let codepoint = u32::from_str_radix(&hex, 16).unwrap();
+        if codepoint > 0x10FFFF {
+            return Err(RatError::LexicalError(format!(
+                "unicode codepoint out of range: U+{:X}",
+                codepoint
+            )));
+        }
+
+        if (0xD800..=0xDFFF).contains(&codepoint) {
+            return Err(RatError::LexicalError(format!(
+                "unicode codepoint is a surrogate: U+{:X}",
+                codepoint
+            )));
+        }
+
+        Ok(format!("\\u{{{}}}", hex))
+    }
+
+    fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
         Ok(None)
     }
-    fn advance_numeric_literal(&mut self, start_pos: Position) -> Result<Option<Token>, RatError> {
+
+    fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         Ok(None)
     }
 
@@ -142,6 +230,18 @@ impl Lexer {
             }
 
             self.source.read()?;
+        }
+    }
+
+    fn should_advance(&mut self, partial: &str) -> Result<bool, RatError> {
+        match self.source.peek()? {
+            Some(b) => {
+                let ch = b as char;
+                let mut extended = String::from(partial);
+                extended.push(ch);
+                Ok(Category::is_any(extended.as_str()).is_some())
+            }
+            None => Ok(false),
         }
     }
 }

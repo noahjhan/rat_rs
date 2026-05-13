@@ -2,7 +2,7 @@ use crate::compiler::Lexer;
 use crate::compiler::RatSource;
 use std::collections::VecDeque;
 
-pub fn compile(filepath: &str) {
+pub fn compile(filepath: &str, verbose: bool) {
     // @todo Add some filepath check here
 
     let source = match RatSource::init(filepath) {
@@ -22,6 +22,13 @@ pub fn compile(filepath: &str) {
 
             Ok(None) => break,
             Err(_) => return,
+        }
+    }
+
+    if verbose {
+        for token in deque {
+            println!("{:#?}", token);
+            println!();
         }
     }
 }

@@ -1,0 +1,6 @@
+fn foo(x: int): int {
+  let y: int = x
+  print(y)
+
+  ret x
+}
