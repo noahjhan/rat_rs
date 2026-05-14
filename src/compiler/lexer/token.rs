@@ -1,5 +1,13 @@
 use crate::compiler::Position;
 
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for super::Category {}
+    impl Sealed for super::Kind {}
+}
+
+pub use sealed::Sealed;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
     Identifier,
@@ -64,7 +72,7 @@ impl Category {
                 | "rev"
                 | "if"
                 | "else"
-                | "else if"
+                // | "else if"
                 | "match"
                 | "main"
         )
@@ -99,31 +107,6 @@ impl Category {
         )
         .then_some(Category::Type)
     }
-
-    // pub fn is_prefix(s: &str) -> bool {
-    //     matches!(
-    //         s,
-    //         "=" | "!"
-    //             | "<"
-    //             | ">"
-    //             | "&"
-    //             | "|"
-    //             | "-"
-    //             | "*"
-    //             | "/"
-    //             | "e"
-    //             | "el"
-    //             | "els"
-    //             | "f"
-    //             | "fn"
-    //             | "r"
-    //             | "re"
-    //     )
-    // }
-    //
-    // pub fn is_none(s: &str) -> bool {
-    //     Self::is_any(s).is_none() && !Self::is_prefix(s)
-    // }
 
     pub fn is_any(s: &str) -> Option<Self> {
         Self::is_keyword(s)
@@ -162,7 +145,7 @@ pub enum ConstituentKeyword {
     ReturnVoid,
     If,
     Else,
-    ElseIf,
+    // ElseIf,
     Match,
     Main,
 }
@@ -268,6 +251,7 @@ impl Kind {
         matches!(self, Kind::Invalid)
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start_line_num: usize,
@@ -291,47 +275,15 @@ impl Span {
     }
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-// pub struct RawToken {
-//     category: Category,
-//     value: String,
-// }
-//
-// impl RawToken {
-//     pub fn new(category: Category, value: String) -> Self {
-//         RawToken {
-//             category: category,
-//             value: value,
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Token {
-    // pub raw: RawToken,
-    pub category: Category,
+pub struct Token<T: Sealed = Category> {
+    pub kind: T,
     pub value: String,
     pub span: Span,
 }
 
-impl Token {
-    // pub fn new(raw: RawToken, span: Span) -> Self {
-    //     Token {
-    //         category: raw.category,
-    //         value: raw.value,
-    //         span: span,
-    //     }
-    // }
-
-    pub fn new(category: Category, value: String, span: Span) -> Self {
-        Token {
-            category: category,
-            value: value,
-            span: span,
-        }
-    }
-
-    pub fn is_valid(&self) -> bool {
-        !matches!(self.category, Category::Invalid)
+impl<T: Sealed> Token<T> {
+    pub fn new(kind: T, value: String, span: Span) -> Self {
+        Token { kind, value, span }
     }
 }

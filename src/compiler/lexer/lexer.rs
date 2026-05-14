@@ -91,11 +91,19 @@ impl Lexer {
         match self.source.read()? {
             Some(b) => {
                 let ch = b as char;
-                partial.push(ch);
+                match ch {
+                    '\"' => partial.push(ch),
+                    _ => {
+                        return Err(RatError::InternalError(String::from(format!(
+                            "expected \'\"\', got {:?}",
+                            ch
+                        ))))
+                    }
+                };
             }
             None => {
                 return Err(RatError::InternalError(String::from(
-                    "Expected \'\"\', Got EOF",
+                    "expected \'\"\', got EOF",
                 )))
             }
         };

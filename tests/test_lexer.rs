@@ -36,9 +36,9 @@ fn test_advance_string_literal() {
     };
 
     assert_eq!(
-        expected_first.category, actual_first.category,
-        "advance_token returned incorrect category. Expected {:?}, Got {:?}",
-        expected_first.category, actual_first.category,
+        expected_first.kind, actual_first.kind,
+        "advance_token returned incorrect kind. Expected {:?}, Got {:?}",
+        expected_first.kind, actual_first.kind,
     );
 
     assert_eq!(
@@ -76,9 +76,9 @@ fn test_advance_string_literal() {
     );
 
     assert_eq!(
-        expected_second.category, actual_second.category,
-        "advance_token returned incorrect second token category. Expected {:?}, Got {:?}",
-        expected_second.category, actual_second.category,
+        expected_second.kind, actual_second.kind,
+        "advance_token returned incorrect second token kind. Expected {:?}, Got {:?}",
+        expected_second.kind, actual_second.kind,
     );
 
     assert_eq!(
