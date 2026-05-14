@@ -8,39 +8,32 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn init(source: RatSource) -> Self {
-        Lexer { source: source }
+        Lexer { source }
     }
 
     pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
-        match self.source.peek()? {
-            Some(b) => {
-                let ch = b as char;
-                match ch {
-                    '\"' => return self.advance_string_literal(),
-                    '\'' => return self.advance_character_literal(),
-                    _ if ch.is_numeric() => return self.advance_numeric_literal(),
-                    _ => {}
-                }
-            }
+        match self.peek()? {
+            Some(ch) => match ch {
+                '\"' => return self.advance_string_literal(),
+                '\'' => return self.advance_character_literal(),
+                _ if ch.is_numeric() => return self.advance_numeric_literal(),
+                _ => {}
+            },
             None => return Ok(None),
         };
 
         match self.advance_whitespace()? {
             Some(_) => {}
-            None => {
-                return Ok(None);
-            }
+            None => return Ok(None),
         };
 
         let start_pos = self.source.position();
         let mut partial = String::new();
 
         loop {
-            let ch = match self.source.read()? {
-                Some(b) => b as char,
-                None => {
-                    return Ok(None);
-                }
+            let ch = match self.read()? {
+                Some(ch) => ch,
+                None => return Ok(None),
             };
 
             partial.push(ch);
@@ -50,35 +43,16 @@ impl Lexer {
             }
 
             match Category::is_any(partial.as_str()) {
-                Some(category) => {
-                    let end_pos = self.source.position();
-                    let token = Token::new(category, partial, Span::set(start_pos, end_pos));
-                    return Ok(Some(token));
-                }
+                Some(category) => return self.emit(category, partial, start_pos),
                 None => {}
             };
 
-            match self.source.peek()? {
-                Some(b) => {
-                    let ch = b as char;
-                    if Category::is_delimiter(ch) {
-                        let end_pos = self.source.position();
-                        let token = Token::new(
-                            Category::Identifier,
-                            partial,
-                            Span::set(start_pos, end_pos),
-                        );
-                        return Ok(Some(token));
-                    }
+            match self.peek()? {
+                Some(ch) if Category::is_delimiter(ch) => {
+                    return self.emit(Category::Identifier, partial, start_pos);
                 }
-                None => {
-                    let end_pos = self.source.position();
-                    return Ok(Some(Token::new(
-                        Category::Identifier,
-                        partial,
-                        Span::set(start_pos, end_pos),
-                    )));
-                }
+                Some(_) => {}
+                None => return self.emit(Category::Identifier, partial, start_pos),
             }
         }
     }
@@ -88,46 +62,36 @@ impl Lexer {
         let mut is_esc_sequence = false;
 
         let mut partial = String::new();
-        match self.source.read()? {
-            Some(b) => {
-                let ch = b as char;
-                match ch {
-                    '\"' => partial.push(ch),
-                    _ => {
-                        return Err(RatError::InternalError(String::from(format!(
-                            "expected \'\"\', got {:?}",
-                            ch
-                        ))))
-                    }
-                };
+
+        // overly defensive?
+        match self.read()? {
+            Some('"') => partial.push('"'),
+            Some(ch) => {
+                return Err(RatError::InternalError(format!(
+                    "expected '\"', got {:?}",
+                    ch
+                )))
             }
             None => {
                 return Err(RatError::InternalError(String::from(
-                    "expected \'\"\', got EOF",
+                    "expected '\"', got EOF",
                 )))
             }
         };
 
         loop {
-            let ch = match self.source.read()? {
-                Some(b) => b as char,
+            let ch = match self.read()? {
+                Some(ch) => ch,
                 None => {
                     return Err(RatError::LexicalError(String::from(
-                        "missing \'\"\' at the end of string literal",
+                        "missing '\"' at the end of string literal",
                     )))
                 }
             };
 
             if is_esc_sequence {
                 match ch {
-                    '\\' => {}
-                    '\'' => {}
-                    '\"' => {}
-                    'n' => {}
-                    'r' => {}
-                    't' => {}
-                    'b' => {}
-                    '0' => {}
+                    '\\' | '\'' | '\"' | 'n' | 'r' | 't' | 'b' | '0' => {}
                     'u' => {
                         let unicode = self.advance_unicode_escape()?;
                         partial.push_str(&unicode);
@@ -141,7 +105,6 @@ impl Lexer {
                         )));
                     }
                 }
-
                 is_esc_sequence = false;
                 partial.push(ch);
                 continue;
@@ -152,16 +115,14 @@ impl Lexer {
             if ch == '\\' {
                 is_esc_sequence = true;
             } else if ch == '\"' {
-                let end_pos = self.source.position();
-                let token = Token::new(Category::Literal, partial, Span::set(start_pos, end_pos));
-                return Ok(Some(token));
+                return self.emit(Category::Literal, partial, start_pos);
             }
         }
     }
 
     fn advance_unicode_escape(&mut self) -> Result<String, RatError> {
-        match self.source.read()? {
-            Some(b) if (b as char) == '{' => {}
+        match self.read()? {
+            Some('{') => {}
             _ => {
                 return Err(RatError::LexicalError(String::from(
                     "expected '{' after '\\u' in unicode escape",
@@ -171,19 +132,14 @@ impl Lexer {
 
         let mut hex = String::new();
         loop {
-            match self.source.read()? {
-                Some(b) => {
-                    let hch = b as char;
-                    if hch == '}' {
-                        break;
-                    }
-                    if !hch.is_ascii_hexdigit() {
-                        return Err(RatError::LexicalError(format!(
-                            "invalid hexadecimal digit in unicode escape: '{}'",
-                            hch
-                        )));
-                    }
-                    hex.push(hch);
+            match self.read()? {
+                Some('}') => break,
+                Some(hch) if hch.is_ascii_hexdigit() => hex.push(hch),
+                Some(hch) => {
+                    return Err(RatError::LexicalError(format!(
+                        "invalid hexadecimal digit in unicode escape: '{}'",
+                        hch
+                    )));
                 }
                 None => {
                     return Err(RatError::LexicalError(String::from(
@@ -223,33 +179,118 @@ impl Lexer {
     }
 
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
-        Ok(None)
+        let start_pos = self.source.position();
+        let mut is_floating_type = false;
+        let mut is_unsigned_type = false;
+        let mut is_valid_over = false;
+
+        let mut partial = String::new();
+        match self.read()? {
+            Some(ch) => partial.push(ch),
+            None => {
+                return Err(RatError::InternalError(String::from(
+                    "expected numeric character, got EOF",
+                )))
+            }
+        };
+
+        loop {
+            let ch = match self.read()? {
+                Some(ch) => ch,
+                None => {
+                    return Ok(None);
+                }
+            };
+
+            match ch {
+                '.' => {
+                    if is_floating_type {
+                        return Err(RatError::LexicalError(String::from(
+                            "unexpected '.' in numeric literal",
+                        )));
+                    }
+
+                    is_floating_type = true;
+                }
+                _ if Category::is_delimiter(ch) => {
+                    return self.emit(Category::Literal, partial, start_pos);
+                }
+                'u' => {
+                    if is_floating_type || is_valid_over {
+                        return Err(RatError::LexicalError(format!(
+                            "unexpected character in numeric literal, got {:?}",
+                            ch
+                        )));
+                    }
+
+                    is_unsigned_type = true;
+                }
+                'f' | 'd' => {
+                    if is_unsigned_type || is_valid_over {
+                        return Err(RatError::LexicalError(format!(
+                            "unexpected character in numeric literal, got {:?}",
+                            ch
+                        )));
+                    }
+
+                    is_valid_over = true;
+                }
+                'l' | 's' | 'c' => {
+                    is_valid_over = true;
+                }
+                _ => {
+                    return Err(RatError::LexicalError(format!(
+                        "unexpected character in numeric literal, got {:?}",
+                        ch
+                    )))
+                }
+            };
+            partial.push(ch);
+        }
     }
 
     fn advance_whitespace(&mut self) -> Result<Option<()>, RatError> {
         loop {
-            let Some(b) = self.source.peek()? else {
+            let Some(ch) = self.peek()? else {
                 return Ok(None);
             };
-
-            let ch = b as char;
             if !ch.is_whitespace() || ch == '\n' {
                 return Ok(Some(()));
             }
-
             self.source.read()?;
         }
     }
 
     fn should_advance(&mut self, partial: &str) -> Result<bool, RatError> {
-        match self.source.peek()? {
-            Some(b) => {
-                let ch = b as char;
+        match self.peek()? {
+            Some(ch) => {
                 let mut extended = String::from(partial);
                 extended.push(ch);
                 Ok(Category::is_any(extended.as_str()).is_some())
             }
             None => Ok(false),
         }
+    }
+
+    fn read(&mut self) -> Result<Option<char>, RatError> {
+        Ok(self.source.read()?.map(|b| b as char))
+    }
+
+    fn peek(&mut self) -> Result<Option<char>, RatError> {
+        Ok(self.source.peek()?.map(|b| b as char))
+    }
+
+    fn emit(
+        &mut self,
+        category: Category,
+        partial: String,
+        start_pos: Position,
+    ) -> Result<Option<Token>, RatError> {
+        let end_pos = self.source.position();
+        Ok(Some(Token::new(
+            category,
+            partial,
+            Span::set(start_pos, end_pos),
+        )))
     }
 }

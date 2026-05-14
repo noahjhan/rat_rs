@@ -82,7 +82,20 @@ impl Category {
     fn is_punctuator(s: &str) -> Option<Self> {
         matches!(
             s,
-            ":" | "'" | "\"" | "," | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
+            ":" | "'"
+                | "\""
+                | ","
+                | "."
+                | "["
+                | "]"
+                | "{"
+                | "}"
+                | "("
+                | ")"
+                | "//"
+                | "/*"
+                | "*/"
+                | "\n"
         )
         .then_some(Category::Punctuator)
     }
