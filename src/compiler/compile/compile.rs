@@ -16,18 +16,17 @@ pub fn compile(filepath: &str, verbose: bool) {
 
     loop {
         match lexer.next() {
-            Ok(Some(token)) => {
+            Ok(Some(mut token)) => {
                 if verbose {
-                    println!("{:#?}", token);
-                    println!();
+                    // println!("{:#?}", token);
+                    token.debug_print();
                 }
 
                 deque.push_back(token);
             }
             Ok(None) => break,
             Err(err) => {
-                println!("{:?}", err);
-                println!();
+                println!("{:?}\n", err);
             }
         }
     }

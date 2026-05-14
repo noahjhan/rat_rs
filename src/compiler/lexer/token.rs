@@ -1,7 +1,7 @@
 use crate::compiler::Position;
 
 mod sealed {
-    pub trait Sealed {}
+    pub trait Sealed: std::fmt::Debug {}
     impl Sealed for super::Category {}
     impl Sealed for super::Kind {}
 }
@@ -298,5 +298,10 @@ pub struct Token<T: Sealed = Category> {
 impl<T: Sealed> Token<T> {
     pub fn new(kind: T, value: String, span: Span) -> Self {
         Token { kind, value, span }
+    }
+
+    pub fn debug_print(&mut self) {
+        println!("Kind:  {:?}", self.kind);
+        println!("Value: {:?}\n", self.value);
     }
 }

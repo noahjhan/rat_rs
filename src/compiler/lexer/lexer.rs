@@ -2,6 +2,11 @@ use crate::compiler::RatError;
 use crate::compiler::RatSource;
 use crate::compiler::{Category, Position, Span, Token};
 
+// TODO:
+// multi-line strings
+// single-line comments
+// multi-line comments
+
 pub struct Lexer {
     source: RatSource,
 }
@@ -52,7 +57,7 @@ impl Lexer {
             }
 
             match self.peek()? {
-                Some(ch) if Category::is_delimiter(ch) | true => {
+                Some(ch) if Category::is_delimiter(ch) => {
                     return self.emit(Category::Identifier, buf, start_pos);
                 }
                 None => return self.emit(Category::Identifier, buf, start_pos),
@@ -275,10 +280,7 @@ impl Lexer {
                 }
                 Some(ch) if !Category::is_delimiter(ch) => {
                     return Err(RatError::lexical(
-                        format!(
-                            "unexpected character {:?} after floating point numeric literal",
-                            ch
-                        ),
+                        format!("unexpected character {:?} after numeric literal", ch),
                         &buf,
                         Span::set(start_pos, self.source.position()),
                     ));
@@ -314,7 +316,6 @@ impl Lexer {
                 &buf,
                 Span::set(start_pos, self.source.position()),
             )),
-            // delimiter or EOF
             _ => self.emit(Category::Literal, buf, start_pos),
         }
     }
@@ -327,7 +328,7 @@ impl Lexer {
     ) -> Result<Option<Token>, RatError> {
         match self.peek()? {
             Some(ch) if !Category::is_delimiter(ch) => Err(RatError::lexical(
-                format!("unexpected character {:?} after numeric literal suffix", ch),
+                format!("unexpected character {:?} after numeric literal", ch),
                 &partial,
                 Span::set(start_pos, self.source.position()),
             )),
@@ -338,7 +339,7 @@ impl Lexer {
     fn read_until_delimiter(&mut self) -> Result<(), RatError> {
         loop {
             match self.peek()? {
-                Some(ch) if Category::is_delimiter(ch) | true => return Ok(()),
+                Some(ch) if Category::is_delimiter(ch) => return Ok(()),
                 None => return Ok(()),
                 _ => {
                     self.read()?;
