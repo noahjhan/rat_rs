@@ -26,7 +26,7 @@ fn test_advance_string_literal() {
         },
     );
 
-    let actual_first = match lexer.advance_token() {
+    let actual_first = match lexer.next() {
         Ok(Some(token)) => token,
         Ok(None) => panic!("advance_token returned None before EOF"),
         Err(err) => panic!(
@@ -53,7 +53,7 @@ fn test_advance_string_literal() {
         expected_first.span, actual_first.span,
     );
 
-    let actual_second = match lexer.advance_token() {
+    let actual_second = match lexer.next() {
         Ok(Some(token)) => token,
         Ok(None) => panic!("advance_token returned None before newline token"),
         Err(err) => panic!(
@@ -93,7 +93,7 @@ fn test_advance_string_literal() {
         expected_second.span, actual_second.span,
     );
 
-    match lexer.advance_token() {
+    match lexer.next() {
         Ok(Some(token)) => panic!(
             "advance_token returned a valid token while reading EOF. Got {:?}",
             token

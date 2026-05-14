@@ -11,7 +11,18 @@ impl Lexer {
         Lexer { source }
     }
 
-    pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
+    pub fn next(&mut self) -> Result<Option<Token>, RatError> {
+        match self.advance_token() {
+            Ok(token) => Ok(token),
+            Err(err @ RatError::LexicalError(_)) => {
+                let _ = self.read_until_delimiter();
+                Err(err)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
         match self.peek()? {
             Some(ch) => match ch {
                 '\"' => return self.advance_string_literal(),
@@ -178,74 +189,115 @@ impl Lexer {
         Ok(None)
     }
 
+    fn read_numerics(&mut self, buf: &mut String) -> Result<bool, RatError> {
+        let mut read_any = false;
+        loop {
+            match self.peek()? {
+                Some(ch) if ch.is_ascii_digit() => {
+                    self.read()?;
+                    buf.push(ch);
+                    read_any = true;
+                }
+                _ => return Ok(read_any),
+            }
+        }
+    }
+
+    // regex: (\d+)(((\.)?(\d*)?(d|f)?)|(u)?[icls]?)?)
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
-        let mut is_floating_type = false;
-        let mut is_unsigned_type = false;
-        let mut is_valid_over = false;
-
         let mut partial = String::new();
-        match self.read()? {
-            Some(ch) => partial.push(ch),
-            None => {
-                return Err(RatError::InternalError(String::from(
-                    "expected numeric character, got EOF",
-                )))
-            }
-        };
 
-        loop {
-            let ch = match self.read()? {
-                Some(ch) => ch,
-                None => {
-                    return Ok(None);
-                }
-            };
+        if !self.read_numerics(&mut partial)? {
+            return Err(RatError::InternalError(String::from(
+                "advance_numeric_literal called but no leading digits found",
+            )));
+        }
 
-            match ch {
-                '.' => {
-                    if is_floating_type {
-                        return Err(RatError::LexicalError(String::from(
-                            "unexpected '.' in numeric literal",
-                        )));
-                    }
+        if matches!(self.peek()?, Some('.')) {
+            self.read()?;
+            partial.push('.');
 
-                    is_floating_type = true;
-                }
-                _ if Category::is_delimiter(ch) => {
-                    return self.emit(Category::Literal, partial, start_pos);
-                }
-                'u' => {
-                    if is_floating_type || is_valid_over {
-                        return Err(RatError::LexicalError(format!(
-                            "unexpected character in numeric literal, got {:?}",
-                            ch
-                        )));
-                    }
+            self.read_numerics(&mut partial)?;
 
-                    is_unsigned_type = true;
+            match self.peek()? {
+                Some('d') | Some('f') => {
+                    let suffix = self.read()?.unwrap();
+                    partial.push(suffix);
+                    return self.expect_delimiter_then_emit(Category::Literal, partial, start_pos);
                 }
-                'f' | 'd' => {
-                    if is_unsigned_type || is_valid_over {
-                        return Err(RatError::LexicalError(format!(
-                            "unexpected character in numeric literal, got {:?}",
-                            ch
-                        )));
-                    }
-
-                    is_valid_over = true;
-                }
-                'l' | 's' | 'c' => {
-                    is_valid_over = true;
+                Some(ch) if !Category::is_delimiter(ch) => {
+                    return Err(RatError::LexicalError(format!(
+                        "unexpected character {:?} after fractional numeric literal, expected 'd', 'f', or a delimiter",
+                        ch
+                    )));
                 }
                 _ => {
-                    return Err(RatError::LexicalError(format!(
-                        "unexpected character in numeric literal, got {:?}",
-                        ch
-                    )))
+                    return self.emit(Category::Literal, partial, start_pos);
                 }
+            }
+        }
+
+        match self.peek()? {
+            Some(ch @ 'd') | Some(ch @ 'f') => {
+                self.read()?;
+                partial.push(ch);
+                return self.expect_delimiter_then_emit(Category::Literal, partial, start_pos);
+            }
+            Some('u') => {
+                self.read()?;
+                partial.push('u');
+                match self.peek()? {
+                    Some(ch @ 'i') | Some(ch @ 'c') | Some(ch @ 'l') | Some(ch @ 's') => {
+                        self.read()?;
+                        partial.push(ch);
+                    }
+                    _ => {}
+                }
+                return self.expect_delimiter_then_emit(Category::Literal, partial, start_pos);
+            }
+            Some(ch @ 'i') | Some(ch @ 'c') | Some(ch @ 'l') | Some(ch @ 's') => {
+                self.read()?;
+                partial.push(ch);
+                return self.expect_delimiter_then_emit(Category::Literal, partial, start_pos);
+            }
+            Some(ch) if Category::is_delimiter(ch) => {
+                return self.emit(Category::Literal, partial, start_pos);
+            }
+            None => {
+                return self.emit(Category::Literal, partial, start_pos);
+            }
+            Some(ch) => {
+                return Err(RatError::LexicalError(format!(
+                    "unexpected character {:?} in numeric literal, expected a suffix ('u', 'i', 'c', 'l', 's', 'f', 'd'), '.', or a delimiter",
+                    ch
+                )));
+            }
+        }
+    }
+
+    fn expect_delimiter_then_emit(
+        &mut self,
+        category: Category,
+        partial: String,
+        start_pos: Position,
+    ) -> Result<Option<Token>, RatError> {
+        match self.peek()? {
+            Some(ch) if !Category::is_delimiter(ch) => Err(RatError::LexicalError(format!(
+                "unexpected character {:?} after numeric literal suffix, expected a delimiter",
+                ch
+            ))),
+            _ => self.emit(category, partial, start_pos),
+        }
+    }
+
+    fn read_until_delimiter(&mut self) -> Result<(), RatError> {
+        loop {
+            match self.peek()? {
+                Some(ch) if Category::is_delimiter(ch) => return Ok(()),
+                None => return Ok(()),
+                _ => self.read()?,
             };
-            partial.push(ch);
         }
     }
 

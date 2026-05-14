@@ -15,20 +15,20 @@ pub fn compile(filepath: &str, verbose: bool) {
     let mut lexer = Lexer::init(source);
 
     loop {
-        match lexer.advance_token() {
+        match lexer.next() {
             Ok(Some(token)) => {
+                if verbose {
+                    println!("{:#?}", token);
+                    println!();
+                }
+
                 deque.push_back(token);
             }
-
             Ok(None) => break,
-            Err(_) => return,
-        }
-    }
-
-    if verbose {
-        for token in deque {
-            println!("{:#?}", token);
-            println!();
+            Err(err) => {
+                println!("{:?}", err);
+                println!();
+            }
         }
     }
 }
