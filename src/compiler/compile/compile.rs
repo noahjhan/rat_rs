@@ -18,7 +18,6 @@ pub fn compile(filepath: &str, verbose: bool) {
         match lexer.next() {
             Ok(Some(mut token)) => {
                 if verbose {
-                    // println!("{:#?}", token);
                     token.debug_print();
                 }
 

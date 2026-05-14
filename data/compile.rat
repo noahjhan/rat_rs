@@ -3,7 +3,6 @@ fn foo(x: int): int {
   print(y)
 
   print("hello")
-  .2f
 
   ret x
 }

@@ -4,8 +4,8 @@ use rat::compiler::RatSource;
 #[test]
 fn test_init_file_exists() {
     let expected = Position {
-        line_num: 1,
-        col_num: 1,
+        line: 1,
+        col: 1,
         offset: 0,
     };
 
@@ -35,8 +35,8 @@ fn test_init_nonexistent_file() {
 #[test]
 fn test_read() {
     let expected_pos = Position {
-        line_num: 3,
-        col_num: 1,
+        line: 3,
+        col: 1,
         offset: 32,
     };
 
@@ -67,11 +67,11 @@ fn test_read() {
 #[test]
 fn test_peek() {
     let expected_pos = Position {
-        line_num: 2,
-        col_num: 1,
+        line: 2,
+        col: 1,
         offset: 14,
     };
-    let expected_peek_output = b'b';
+    let expected_peek_output = 'b';
     let mut source = RatSource::init("data/file_exists.txt").unwrap();
 
     for _ in 0..14 {

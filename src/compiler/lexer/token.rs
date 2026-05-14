@@ -19,6 +19,13 @@ pub enum Category {
     Invalid,
 }
 
+// :  ->  identifier: type
+// {} ->  around functions and initializer lists
+// () ->  function calls & expressions
+// .  ->  access but NOT the first in numeric literals
+// ,  ->  between parameters
+// \  ->  likely not
+
 impl Category {
     pub fn is_delimiter(ch: char) -> bool {
         if ch.is_ascii_punctuation() || ch.is_whitespace() {
@@ -265,26 +272,15 @@ impl Kind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    pub start_line_num: usize,
-    pub start_col_num: usize,
-    pub start_offset: usize,
-    pub end_line_num: usize,
-    pub end_col_num: usize,
-    pub end_offset: usize,
+    pub start: Position,
+    pub end: Position,
 }
 
 impl Span {
     pub fn set(start: Position, end: Position) -> Self {
-        Span {
-            start_line_num: start.line_num,
-            start_col_num: start.col_num,
-            start_offset: start.offset,
-            end_line_num: end.line_num,
-            end_col_num: end.col_num,
-            end_offset: end.offset,
-        }
+        Span { start, end }
     }
 }
 

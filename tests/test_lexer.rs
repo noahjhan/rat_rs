@@ -1,6 +1,6 @@
 use rat::compiler::Lexer;
-use rat::compiler::RatSource;
 use rat::compiler::{Category, Span, Token};
+use rat::compiler::{Position, RatSource};
 
 // #[test]
 // fn test_print_full_file() {
@@ -17,12 +17,16 @@ fn test_advance_string_literal() {
         Category::Literal,
         String::from("\"bonjour le monde!\""),
         Span {
-            start_line_num: 1,
-            start_col_num: 1,
-            start_offset: 0,
-            end_line_num: 1,
-            end_col_num: 20,
-            end_offset: 19,
+            start: Position {
+                line: 1,
+                col: 1,
+                offset: 0,
+            },
+            end: Position {
+                line: 1,
+                col: 20,
+                offset: 19,
+            },
         },
     );
 
@@ -66,12 +70,16 @@ fn test_advance_string_literal() {
         Category::Punctuator,
         String::from("\n"),
         Span {
-            start_line_num: 1,
-            start_col_num: 20,
-            start_offset: 19,
-            end_line_num: 2,
-            end_col_num: 1,
-            end_offset: 20,
+            start: Position {
+                line: 1,
+                col: 20,
+                offset: 19,
+            },
+            end: Position {
+                line: 2,
+                col: 1,
+                offset: 20,
+            },
         },
     );
 

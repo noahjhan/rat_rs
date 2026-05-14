@@ -1,5 +1,4 @@
-// errors.rs
-use crate::compiler::Span;
+use crate::compiler::{Position, Span};
 use std::io;
 
 #[derive(Debug)]
@@ -12,6 +11,7 @@ pub struct ErrorInfo {
 #[derive(Debug)]
 pub enum RatError {
     IoError(ErrorInfo),
+    SourceError(ErrorInfo),
     LexicalError(ErrorInfo),
     InternalError(ErrorInfo),
 }
@@ -20,6 +20,14 @@ impl RatError {
     pub fn io(err: io::Error, value: impl Into<String>, span: Span) -> Self {
         RatError::IoError(ErrorInfo {
             err: err.to_string(),
+            value: value.into(),
+            span,
+        })
+    }
+
+    pub fn source(err: impl Into<String>, value: impl Into<String>, span: Span) -> Self {
+        RatError::SourceError(ErrorInfo {
+            err: err.into(),
             value: value.into(),
             span,
         })
@@ -42,18 +50,20 @@ impl RatError {
     }
 }
 
-impl From<std::io::Error> for RatError {
-    fn from(err: std::io::Error) -> Self {
+impl From<io::Error> for RatError {
+    fn from(err: io::Error) -> Self {
+        let zero = Position {
+            line: 0,
+            col: 0,
+            offset: 0,
+        };
+
         RatError::IoError(ErrorInfo {
             err: err.to_string(),
             value: String::new(),
             span: Span {
-                start_line_num: 0,
-                start_col_num: 0,
-                start_offset: 0,
-                end_line_num: 0,
-                end_col_num: 0,
-                end_offset: 0,
+                start: zero,
+                end: zero,
             },
         })
     }
