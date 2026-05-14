@@ -1,6 +1,5 @@
 use crate::compiler::Lexer;
 use crate::compiler::RatSource;
-use std::collections::VecDeque;
 
 pub fn compile(filepath: &str, verbose: bool) {
     // @todo Add some filepath check here
@@ -11,19 +10,16 @@ pub fn compile(filepath: &str, verbose: bool) {
     };
 
     // takes a rat source file, returns a lexer with a token queue
-    let mut deque = VecDeque::new();
     let mut lexer = Lexer::init(source);
+    let deque = lexer.tokens();
 
-    loop {
-        match lexer.next() {
-            Ok(Some(mut token)) => {
+    for token in deque {
+        match token {
+            Ok(mut token) => {
                 if verbose {
                     token.debug_print();
                 }
-
-                deque.push_back(token);
             }
-            Ok(None) => break,
             Err(err) => {
                 println!("{:?}\n", err);
             }

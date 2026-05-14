@@ -1,6 +1,7 @@
 use crate::compiler::RatError;
 use crate::compiler::RatSource;
 use crate::compiler::{Category, Position, Span, Token};
+use std::collections::VecDeque;
 
 pub struct Lexer {
     source: RatSource,
@@ -13,6 +14,20 @@ impl Lexer {
             source,
             errors: Vec::new(),
         }
+    }
+
+    pub fn tokens(&mut self) -> VecDeque<Result<Token, RatError>> {
+        let mut deque = VecDeque::new();
+
+        while let Some(result) = match self.next() {
+            Ok(Some(token)) => Some(Ok(token)),
+            Err(err) => Some(Err(err)),
+            Ok(None) => None,
+        } {
+            deque.push_back(result);
+        }
+
+        deque
     }
 
     pub fn next(&mut self) -> Result<Option<Token>, RatError> {
