@@ -21,7 +21,7 @@ fn foo(x: int): int {
 
 ### fn_
 
-This is a rat-tail function, meaning no explicit return value. Since code inside fn_ functions typically interoperates with stateful behavior, avoid passing in mutable refernces defined outside the function. Use the keyword rev to exit from rat-tails.
+This is a rat-tail function, meaning no explicit return value. Since code inside fn_ functions typically interoperates with stateful behavior, avoid passing in mutable references defined outside the function. Use the keyword rev to exit from rat-tails.
 
 ```
 fn_ main() {
