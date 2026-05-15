@@ -25,7 +25,7 @@ This is a rat-tail function, meaning no explicit return value. Since code inside
 
 ```
 fn_ main() {
-    io.println("bonjour le monde!")
+    io::println("bonjour le monde!")
     rev
 }
 ```
@@ -36,7 +36,7 @@ When a function can return an error, use fn?. Use the keyword ret? to return eit
 
 ```
 fn? bar() file? {
-    let f: file? = file.open("nonexistent_file.txt")
+    let f: file? = file::open("nonexistent_file.txt")
     ret? f
 }
 
