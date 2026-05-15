@@ -1,5 +1,4 @@
-use rat::compiler::Position;
-use rat::compiler::RatSource;
+use rat::compiler::{Position, RatSource};
 
 #[test]
 fn test_init_file_exists() {
@@ -8,27 +7,15 @@ fn test_init_file_exists() {
         col: 1,
         offset: 0,
     };
-
-    let result = RatSource::init("data/file_exists.txt");
-    assert!(result.is_ok());
-
-    let source = result.unwrap();
-    let actual = source.position();
-
-    assert_eq!(
-        expected, actual,
-        "Expected init position {:?}, got {:?}",
-        expected, actual
-    );
+    let source = RatSource::init("data/file_exists.txt").unwrap();
+    assert_eq!(expected, source.position());
 }
 
 #[test]
 fn test_init_nonexistent_file() {
-    let result = RatSource::init("data/nonexistent_file.txt");
-
     assert!(
-        result.is_err(),
-        "Expected init to fail for nonexistent file"
+        RatSource::init("data/nonexistent_file.txt").is_err(),
+        "expected init to fail for nonexistent file"
     );
 }
 
@@ -39,28 +26,23 @@ fn test_read() {
         col: 1,
         offset: 32,
     };
-
     let expected_output = "hello, world.\nbonjour le monde!\n";
 
     let mut source = RatSource::init("data/file_exists.txt").unwrap();
     let mut actual_output = String::new();
 
-    while let Some(b) = source.read().unwrap() {
-        actual_output.push(b as char);
+    while let Some(ch) = source.read().unwrap() {
+        actual_output.push(ch);
     }
 
-    let actual_pos = source.position();
-
     assert_eq!(
-        expected_pos, actual_pos,
-        "Read stored incorrect position. Expected {:?} but got {:?}",
-        expected_pos, actual_pos,
+        expected_pos,
+        source.position(),
+        "read stored incorrect position"
     );
-
     assert_eq!(
         expected_output, actual_output,
-        "Read returned incorrect output. Expected {:?} but got {:?}",
-        expected_output, actual_output,
+        "read returned incorrect output"
     );
 }
 
@@ -71,28 +53,29 @@ fn test_peek() {
         col: 1,
         offset: 14,
     };
-    let expected_peek_output = 'b';
     let mut source = RatSource::init("data/file_exists.txt").unwrap();
 
     for _ in 0..14 {
-        match source.read().unwrap() {
-            Some(_) => continue,
-            None => break,
+        if source.read().unwrap().is_none() {
+            break;
         }
     }
 
-    let actual_peek_output = source.peek().unwrap().expect("Expected a byte but got EOF");
+    let peeked = source.peek().unwrap().expect("expected a char but got EOF");
+    assert_eq!('b', peeked, "peek returned incorrect character");
 
     assert_eq!(
-        expected_peek_output, actual_peek_output,
-        "Peek returned incorrect output. Expected {:?} but got {:?}",
-        expected_peek_output, actual_peek_output,
+        expected_pos,
+        source.position(),
+        "peek must not advance position"
     );
+}
 
-    let actual_pos = source.position();
-    assert_eq!(
-        expected_pos, actual_pos,
-        "Peek stored incorrect position. Expected {:?} but got {:?}",
-        expected_pos, actual_pos,
-    );
+#[test]
+fn test_bad_utf8() {
+    let mut source = RatSource::init("data/bad_utf8.txt").unwrap();
+    match source.read() {
+        Ok(_) => panic!("read returned OK upon reading bad utf8 character"),
+        Err(_) => {}
+    }
 }

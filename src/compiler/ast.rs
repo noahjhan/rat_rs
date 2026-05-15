@@ -1,5 +1,4 @@
 use crate::compiler::Token;
-use std::vec::Vec;
 
 #[derive(Debug)]
 pub enum Ast {
@@ -40,24 +39,19 @@ pub enum Expr {
         op: Token,
         rhs: Box<Expr>,
     },
-
     UnaryExpr {
         expr: Box<Expr>,
         op: Token,
     },
-
     NumericLiteral {
         value: Token,
     },
-
     StringLiteral {
         value: Token,
     },
-
     Identifier {
         value: Token,
     },
-
     FunctionCall {
         identifier: Token,
         parameters: Vec<Expr>,

@@ -11,18 +11,27 @@ pub struct Position {
     pub offset: usize,
 }
 
-#[derive(Debug)]
 pub struct RatSource {
     reader: BufReader<File>,
     buf: [u8; BUF_SIZE],
-    pos: usize,
-    len: usize,
-
+    buf_pos: usize,
+    buf_len: usize,
     offset: usize,
     line: usize,
     col: usize,
 
     peeked: Option<char>,
+}
+
+impl std::fmt::Debug for RatSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RatSource")
+            .field("offset", &self.offset)
+            .field("line", &self.line)
+            .field("col", &self.col)
+            .field("peeked", &self.peeked)
+            .finish_non_exhaustive()
+    }
 }
 
 impl RatSource {
@@ -31,8 +40,8 @@ impl RatSource {
         Ok(Self {
             reader: BufReader::new(file),
             buf: [0; BUF_SIZE],
-            pos: 0,
-            len: 0,
+            buf_pos: 0,
+            buf_len: 0,
             offset: 0,
             line: 1,
             col: 1,
@@ -48,8 +57,7 @@ impl RatSource {
                 None => return Ok(None),
             },
         };
-
-        self.consume_char(ch);
+        self.consume(ch);
         Ok(Some(ch))
     }
 
@@ -69,29 +77,29 @@ impl RatSource {
     }
 
     fn fill_buf(&mut self) -> Result<bool, RatError> {
-        if self.pos < self.len {
+        if self.buf_pos < self.buf_len {
             return Ok(true);
         }
-        let b = self.reader.read(&mut self.buf)?;
-        if b == 0 {
+        let n = self.reader.read(&mut self.buf)?;
+        if n == 0 {
             return Ok(false);
         }
-        self.pos = 0;
-        self.len = b;
+        self.buf_pos = 0;
+        self.buf_len = n;
         Ok(true)
     }
 
-    fn peek_buf_byte(&mut self) -> Result<Option<u8>, RatError> {
+    fn peek_byte(&mut self) -> Result<Option<u8>, RatError> {
         if !self.fill_buf()? {
             return Ok(None);
         }
-        Ok(Some(self.buf[self.pos]))
+        Ok(Some(self.buf[self.buf_pos]))
     }
 
-    fn take_buf_byte(&mut self) -> Result<Option<u8>, RatError> {
-        match self.peek_buf_byte()? {
+    fn take_byte(&mut self) -> Result<Option<u8>, RatError> {
+        match self.peek_byte()? {
             Some(b) => {
-                self.pos += 1;
+                self.buf_pos += 1;
                 Ok(Some(b))
             }
             None => Ok(None),
@@ -99,52 +107,44 @@ impl RatSource {
     }
 
     fn next_byte(&mut self) -> Result<Option<u8>, RatError> {
-        let b = match self.take_buf_byte()? {
-            Some(b) => b,
-            None => return Ok(None),
-        };
-
-        if b == b'\r' {
-            if matches!(self.peek_buf_byte()?, Some(b'\n')) {
-                self.pos += 1;
+        match self.take_byte()? {
+            Some(b'\r') => {
+                if matches!(self.peek_byte()?, Some(b'\n')) {
+                    self.buf_pos += 1;
+                }
+                Ok(Some(b'\n'))
             }
-            return Ok(Some(b'\n'));
+            other => Ok(other),
         }
-
-        Ok(Some(b))
     }
 
     fn decode_char(&mut self) -> Result<Option<char>, RatError> {
-        let b = match self.next_byte()? {
+        let b0 = match self.next_byte()? {
             Some(b) => b,
             None => return Ok(None),
         };
 
-        if b < 0x80 {
-            return Ok(Some(b as char));
+        if b0 < 0x80 {
+            return Ok(Some(b0 as char));
         }
 
-        let width = match b.leading_ones() {
-            2 => 2,
+        let width = match b0.leading_ones() {
+            2 => 2usize,
             3 => 3,
             4 => 4,
-            _ => return Err(self.invalid_utf8(self.offset)),
+            _ => return Err(self.utf8_error()),
         };
 
-        let mut bytes = [b, 0, 0, 0];
-        for i in 1..width {
-            let cont = self
-                .next_byte()?
-                .ok_or_else(|| self.invalid_utf8(self.offset))?;
-            bytes[i] = cont;
+        let mut bytes = [b0, 0, 0, 0];
+        for slot in bytes[1..width].iter_mut() {
+            *slot = self.next_byte()?.ok_or_else(|| self.utf8_error())?;
         }
 
-        let s = std::str::from_utf8(&bytes[..width]).map_err(|_| self.invalid_utf8(self.offset))?;
-
+        let s = std::str::from_utf8(&bytes[..width]).map_err(|_| self.utf8_error())?;
         Ok(s.chars().next())
     }
 
-    fn consume_char(&mut self, ch: char) {
+    fn consume(&mut self, ch: char) {
         self.offset += ch.len_utf8();
         if ch == '\n' {
             self.line += 1;
@@ -154,15 +154,14 @@ impl RatSource {
         }
     }
 
-    fn invalid_utf8(&self, offset: usize) -> RatError {
+    fn utf8_error(&self) -> RatError {
         let pos = Position {
             line: self.line,
             col: self.col,
-            offset,
+            offset: self.offset,
         };
-
         RatError::source(
-            format!("invalid byte sequence at offset: {:?}", offset),
+            format!("invalid utf8 sequence at offset {}", self.offset),
             String::new(),
             Span {
                 start: pos,

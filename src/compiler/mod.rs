@@ -1,12 +1,13 @@
-pub mod ast;
-pub mod compile;
-pub mod error;
-pub mod lexer;
-pub mod source;
+mod ast;
+mod compile;
+mod error;
+mod lexer;
+mod source;
+mod token;
 
-pub use ast::ast::Expr;
-pub use compile::compile::compile;
-pub use error::error::RatError;
-pub use lexer::lexer::Lexer;
-pub use lexer::token::{Category, Kind, Span, Token};
-pub use source::source::{Position, RatSource};
+pub use ast::{Ast, Expr, Parameter};
+pub use compile::compile;
+pub use error::{ErrorKind, RatError};
+pub use lexer::Lexer;
+pub use source::{Position, RatSource};
+pub use token::{Category, Kind, Span, Token};

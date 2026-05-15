@@ -1,12 +1,16 @@
 use crate::compiler::Position;
 
-mod sealed {
-    pub trait Sealed: std::fmt::Debug {}
-    impl Sealed for super::Category {}
-    impl Sealed for super::Kind {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Span {
+    pub start: Position,
+    pub end: Position,
 }
 
-pub use sealed::Sealed;
+impl Span {
+    pub fn new(start: Position, end: Position) -> Self {
+        Span { start, end }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
@@ -19,30 +23,28 @@ pub enum Category {
     Invalid,
 }
 
-// :  ->  identifier: type
-// {} ->  around functions and initializer lists
-// () ->  function calls & expressions
-// .  ->  access but NOT the first in numeric literals
-// ,  ->  between parameters
-// \  ->  likely not
-
 impl Category {
     pub fn is_delimiter(ch: char) -> bool {
         if ch == '"' || ch == '\'' {
             return true;
         }
-        if Category::is_punctuator(&String::from(ch)).is_some()
-            || Category::is_operator(&String::from(ch)).is_some()
+        if Self::is_punctuator_str(&ch.to_string()).is_some()
+            || Self::is_operator_str(&ch.to_string()).is_some()
             || ch.is_whitespace()
         {
             return true;
-        } else if ch.is_ascii() {
-            return false;
         }
-        true
+        !ch.is_ascii()
     }
 
-    fn is_operator(s: &str) -> Option<Self> {
+    pub fn is_any(s: &str) -> Option<Self> {
+        Self::is_keyword_str(s)
+            .or_else(|| Self::is_operator_str(s))
+            .or_else(|| Self::is_punctuator_str(s))
+            .or_else(|| Self::is_type_str(s))
+    }
+
+    fn is_operator_str(s: &str) -> Option<Self> {
         matches!(
             s,
             "=" | "+"
@@ -71,7 +73,7 @@ impl Category {
         .then_some(Category::Operator)
     }
 
-    fn is_keyword(s: &str) -> Option<Self> {
+    fn is_keyword_str(s: &str) -> Option<Self> {
         matches!(
             s,
             "let"
@@ -84,14 +86,13 @@ impl Category {
                 | "rev"
                 | "if"
                 | "else"
-                // | "else if"
                 | "match"
                 | "main"
         )
         .then_some(Category::Keyword)
     }
 
-    fn is_punctuator(s: &str) -> Option<Self> {
+    fn is_punctuator_str(s: &str) -> Option<Self> {
         matches!(
             s,
             ":" | "," | "." | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
@@ -99,7 +100,7 @@ impl Category {
         .then_some(Category::Punctuator)
     }
 
-    fn is_type(s: &str) -> Option<Self> {
+    fn is_type_str(s: &str) -> Option<Self> {
         matches!(
             s,
             "int"
@@ -119,13 +120,6 @@ impl Category {
         )
         .then_some(Category::Type)
     }
-
-    pub fn is_any(s: &str) -> Option<Self> {
-        Self::is_keyword(s)
-            .or_else(|| Self::is_operator(s))
-            .or_else(|| Self::is_punctuator(s))
-            .or_else(|| Self::is_type(s))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -137,6 +131,30 @@ pub enum Kind {
     Operator(ConstituentOperator),
     Type(ConstituentType),
     Invalid,
+}
+
+impl Kind {
+    pub fn is_identifier(&self) -> bool {
+        matches!(self, Kind::Identifier(_))
+    }
+    pub fn is_keyword(&self) -> bool {
+        matches!(self, Kind::Keyword(_))
+    }
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Kind::Literal(_))
+    }
+    pub fn is_punctuator(&self) -> bool {
+        matches!(self, Kind::Punctuator(_))
+    }
+    pub fn is_operator(&self) -> bool {
+        matches!(self, Kind::Operator(_))
+    }
+    pub fn is_type(&self) -> bool {
+        matches!(self, Kind::Type(_))
+    }
+    pub fn is_invalid(&self) -> bool {
+        matches!(self, Kind::Invalid)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -157,7 +175,6 @@ pub enum ConstituentKeyword {
     ReturnVoid,
     If,
     Else,
-    // ElseIf,
     Match,
     Main,
 }
@@ -234,62 +251,22 @@ pub enum ConstituentType {
     Void,
 }
 
-impl Kind {
-    pub fn is_identifier(&self) -> bool {
-        matches!(self, Kind::Identifier(_))
-    }
-
-    pub fn is_keyword(&self) -> bool {
-        matches!(self, Kind::Keyword(_))
-    }
-
-    pub fn is_literal(&self) -> bool {
-        matches!(self, Kind::Literal(_))
-    }
-
-    pub fn is_punctuator(&self) -> bool {
-        matches!(self, Kind::Punctuator(_))
-    }
-
-    pub fn is_operator(&self) -> bool {
-        matches!(self, Kind::Operator(_))
-    }
-
-    pub fn is_type(&self) -> bool {
-        matches!(self, Kind::Type(_))
-    }
-
-    pub fn is_invalid(&self) -> bool {
-        matches!(self, Kind::Invalid)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Span {
-    pub start: Position,
-    pub end: Position,
-}
-
-impl Span {
-    pub fn set(start: Position, end: Position) -> Self {
-        Span { start, end }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Token<T: Sealed = Category> {
-    pub kind: T,
+pub struct Token {
+    pub kind: Category,
     pub value: String,
     pub span: Span,
 }
 
-impl<T: Sealed> Token<T> {
-    pub fn new(kind: T, value: String, span: Span) -> Self {
+impl Token {
+    pub fn new(kind: Category, value: String, span: Span) -> Self {
         Token { kind, value, span }
     }
 
-    pub fn debug_print(&mut self) {
-        println!("Kind:  {:?}", self.kind);
-        println!("Value: {:?}\n", self.value);
+    pub fn debug_print(&self) {
+        println!("kind:  {:?}", self.kind);
+        println!("value: {:?}", self.value);
+        println!("line:  {:?}", self.span.start.line);
+        println!("col:   {:?}\n", self.span.start.col);
     }
 }
