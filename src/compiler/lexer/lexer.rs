@@ -93,13 +93,14 @@ impl Lexer {
         }
     }
 
+    // (\d+)(((\.(\d+))?(\d*)(d|f)?)|(u)?[icls]?)?
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut buf = String::new();
 
         if !self.read_ascii_digits(&mut buf)? {
             return Err(RatError::internal(
-                "advance_numeric_literal called but no leading digits found",
+                "advance_numeric_literal() called but no leading digits found",
                 &buf,
                 Span::set(start_pos, self.source.position()),
             ));
@@ -108,6 +109,13 @@ impl Lexer {
         if matches!(self.peek()?, Some('.')) {
             self.read()?;
             buf.push('.');
+            if !self.read_ascii_digits(&mut buf)? {
+                return Err(RatError::lexical(
+                    "expected digits after '.' in numeric literal",
+                    &buf,
+                    Span::set(start_pos, self.source.position()),
+                ));
+            }
             self.read_ascii_digits(&mut buf)?;
             return self.numeric_suffix(&mut buf, start_pos, true);
         }
@@ -121,9 +129,7 @@ impl Lexer {
         start_pos: Position,
         is_floating_type: bool,
     ) -> Result<Option<Token>, RatError> {
-        let is_signed_int_suffix = |ch: char| {
-            return matches!(ch, 'i' | 'c' | 'l' | 's');
-        };
+        let is_int_suffix = |ch: char| matches!(ch, 'i' | 'c' | 'l' | 's');
 
         match self.peek()? {
             Some(ch @ ('d' | 'f')) => {
@@ -134,12 +140,12 @@ impl Lexer {
             Some('u') if !is_floating_type => {
                 self.read()?;
                 buf.push('u');
-                if matches!(self.peek()?, Some(ch) if is_signed_int_suffix(ch)) {
+                if matches!(self.peek()?, Some(ch) if is_int_suffix(ch)) {
                     buf.push(self.read()?.unwrap());
                 }
                 self.expect_delimiter_then_emit(Category::Literal, buf.clone(), start_pos)
             }
-            Some(ch) if !is_floating_type && is_signed_int_suffix(ch) => {
+            Some(ch) if !is_floating_type && is_int_suffix(ch) => {
                 self.read()?;
                 buf.push(ch);
                 self.expect_delimiter_then_emit(Category::Literal, buf.clone(), start_pos)
