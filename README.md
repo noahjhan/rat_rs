@@ -44,7 +44,7 @@ fn? bar() file? {
 
 ### fn\
 
-For anonymous functions, use fn\. Anonymous functions use either ret, rev, or ret? depending on the return value.
+For anonymous functions, use fn\\. Anonymous functions use either ret, rev, or ret? depending on the return value.
 
 ```
 fn baz(): int {
