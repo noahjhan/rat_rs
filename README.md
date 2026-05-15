@@ -10,15 +10,19 @@ Rat is a bare bones, general purpose, statically-typed, multi-paradigm, 'ratatur
 
 Rat contains four function types:
 ### fn
+
+This is the default function in rat. Return values using the keyword ret.
+
 ```
 fn foo(x: int): int {
     ret x + 1
 }
 ```
 
-This is the default function in rat. Return values using the keyword ret.
-
 ### fn_
+
+This is a rat-tail function, meaning no explicit return value. Since code inside fn_ functions typically interoperates with stateful behavior, avoid passing in mutable refernces defined outside the function. Use the keyword rev to exit from rat-tails.
+
 ```
 fn_ main() {
     io.println("bonjour le monde!")
@@ -26,9 +30,10 @@ fn_ main() {
 }
 ```
 
-This is a rat-tail function, meaning no explicit return value. Since code inside fn_ functions typically interoperates with stateful behavior, avoid passing in mutable refernces defined outside the function. Use the keyword rev to exit from rat-tails.
-
 ### fn?
+
+When a function can return an error, use fn?. Use the keyword ret? to return either a value or the resulting error. 
+
 ```
 fn? bar() file? {
     let f: file? = file.open("nonexistent_file.txt")
@@ -37,9 +42,10 @@ fn? bar() file? {
 
 ```
 
-When a function can return an error, use fn?. Use the keyword ret? to return either a value or the resulting error. 
-
 ### fn\
+
+For anonymous functions, use fn\. Anonymous functions use either ret, rev, or ret? depending on the return value.
+
 ```
 fn baz(): int {
     let y: int = 0
@@ -51,5 +57,3 @@ fn baz(): int {
 }
 
 ```
-
-For anonymous functions, use fn\. Anonymous functions use either ret, rev, or ret? depending on the return value.
