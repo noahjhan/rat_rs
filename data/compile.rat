@@ -1,8 +1,11 @@
 fn foo(x: int): int {
-  print("hello")
+  io::println("hello")
 
   let y: int = x
-  print(y)
+  io::println(y)
+
+  let z: float = 3.0f
+  io::println(z)
 
   ret x
 }

@@ -1,4 +1,5 @@
 use crate::compiler::{Category, ErrorKind, Position, RatError, RatSource, Span, Token};
+use regex::Regex;
 use std::collections::VecDeque;
 
 pub struct Lexer {
@@ -57,7 +58,10 @@ impl Lexer {
             None => Ok(None),
             Some('"') => self.advance_string_literal(),
             Some('\'') => self.advance_character_literal(),
-            Some(ch) if ch.is_ascii_digit() => self.advance_numeric_literal(),
+            Some(ch) if ch.is_ascii_digit() => match self.advance_numeric_literal()? {
+                Some(token) => self.verify_numeric_literal(token),
+                None => Ok(None),
+            },
             _ => self.advance_symbol_or_identifier(),
         }
     }
@@ -132,7 +136,19 @@ impl Lexer {
         }
     }
 
-    // regex: (\d+)(((\.(\d+))?(d|f)?)|(u)?[icls]?)?
+    fn verify_numeric_literal(&mut self, token: Token) -> Result<Option<Token>, RatError> {
+        let re = Regex::new(r"(\d+)(((\.(\d+))?(d|f)?)|(u)?[icls]?)?$").unwrap();
+        if re.is_match(&token.value) {
+            return Ok(Some(token));
+        }
+
+        return Err(RatError::internal(
+            "advance_numeric_literal() did not match numeric literal regex specification",
+            token.value,
+            token.span,
+        ));
+    }
+
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start = self.source.position();
         let mut buf = String::new();

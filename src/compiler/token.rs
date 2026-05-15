@@ -69,6 +69,8 @@ impl Category {
                 | ">>"
                 | "->"
                 | "=>"
+                | "::"
+                | "."
         )
         .then_some(Category::Operator)
     }
@@ -95,7 +97,7 @@ impl Category {
     fn is_punctuator_str(s: &str) -> Option<Self> {
         matches!(
             s,
-            ":" | "," | "." | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
+            ":" | "," | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
         )
         .then_some(Category::Punctuator)
     }
