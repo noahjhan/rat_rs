@@ -28,13 +28,18 @@ pub enum Category {
 
 impl Category {
     pub fn is_delimiter(ch: char) -> bool {
-        if ch.is_ascii_punctuation() || ch.is_whitespace() {
+        if ch == '"' || ch == '\'' {
+            return true;
+        }
+        if Category::is_punctuator(&String::from(ch)).is_some()
+            || Category::is_operator(&String::from(ch)).is_some()
+            || ch.is_whitespace()
+        {
             return true;
         } else if ch.is_ascii() {
             return false;
         }
-
-        return true;
+        true
     }
 
     fn is_operator(s: &str) -> Option<Self> {
@@ -89,20 +94,7 @@ impl Category {
     fn is_punctuator(s: &str) -> Option<Self> {
         matches!(
             s,
-            ":" | "'"
-                | "\""
-                | ","
-                | "."
-                | "["
-                | "]"
-                | "{"
-                | "}"
-                | "("
-                | ")"
-                | "//"
-                | "/*"
-                | "*/"
-                | "\n"
+            ":" | "," | "." | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
         )
         .then_some(Category::Punctuator)
     }

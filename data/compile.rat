@@ -1,8 +1,8 @@
 fn foo(x: int): int {
+  print("hello")
+
   let y: int = x
   print(y)
-
-  print("hello")
 
   ret x
 }

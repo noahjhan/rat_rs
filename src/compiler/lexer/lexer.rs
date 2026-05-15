@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 
 pub struct Lexer {
     source: RatSource,
-    pub errors: Vec<RatError>,
+    errors: Vec<RatError>,
 }
 
 impl Lexer {
@@ -18,7 +18,6 @@ impl Lexer {
 
     pub fn tokens(&mut self) -> VecDeque<Result<Token, RatError>> {
         let mut deque = VecDeque::new();
-
         while let Some(result) = match self.next() {
             Ok(Some(token)) => Some(Ok(token)),
             Err(err) => Some(Err(err)),
@@ -26,17 +25,26 @@ impl Lexer {
         } {
             deque.push_back(result);
         }
-
         deque
+    }
+
+    pub fn errors(&mut self) -> Vec<RatError> {
+        self.errors.clone()
     }
 
     pub fn next(&mut self) -> Result<Option<Token>, RatError> {
         match self.advance_token() {
             Err(RatError::LexicalError(info)) => {
+                // Uniform recovery: consume to end of line, producing one
+                // invalid token whose value spans from the start of the bad
+                // token to the next newline/EOF.
+                let start_span = info.span.clone();
                 let mut value = info.value.clone();
-                let span = info.span.clone();
-                value.push_str(&self.read_until_delimiter()?);
                 self.errors.push(RatError::LexicalError(info));
+                while !matches!(self.peek()?, Some('\n') | None) {
+                    value.push(self.read()?.unwrap());
+                }
+                let span = Span::set(start_span.start, self.source.position());
                 Ok(Some(Token::new(Category::Invalid, value, span)))
             }
             other => other,
@@ -44,15 +52,15 @@ impl Lexer {
     }
 
     fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
+        if !self.advance_whitespace()? {
+            return Ok(None);
+        }
         match self.peek()? {
             None => return Ok(None),
-            Some('\"') => return self.advance_string_literal(),
+            Some('"') => return self.advance_string_literal(),
             Some('\'') => return self.advance_character_literal(),
             Some(ch) if ch.is_numeric() => return self.advance_numeric_literal(),
             Some(_) => {}
-        }
-        if !self.advance_whitespace()? {
-            return Ok(None);
         }
         let start_pos = self.source.position();
         let mut buf = String::new();
@@ -82,8 +90,7 @@ impl Lexer {
         buf: &mut String,
         start_pos: Position,
     ) -> Result<(), RatError> {
-        let ch = match self.read()? {
-            Some(ch) => ch,
+        match self.read()? {
             None => {
                 return Err(RatError::lexical(
                     "unterminated escape sequence at EOF",
@@ -91,45 +98,111 @@ impl Lexer {
                     Span::set(start_pos, self.source.position()),
                 ))
             }
-        };
-        match ch {
-            '\\' | '\'' | '\"' | 'n' | 'r' | 't' | 'b' | '0' => {
-                buf.push(ch);
-            }
-            'u' => {
-                let unicode = self.advance_unicode_escape(buf, start_pos)?;
-                buf.push_str(&unicode);
-            }
-            _ => {
-                return Err(RatError::lexical(
-                    format!("invalid escape sequence: '\\{}'", ch),
-                    buf.as_str(),
-                    Span::set(start_pos, self.source.position()),
-                ));
-            }
+            Some(ch) => match ch {
+                '\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0' => buf.push(ch),
+                'u' => {
+                    buf.push(ch);
+                    let unicode = self.advance_unicode_escape(buf, start_pos)?;
+                    buf.push_str(&unicode);
+                }
+                _ => {
+                    buf.push(ch);
+                    return Err(RatError::lexical(
+                        format!("invalid escape sequence: '\\{}'", ch),
+                        buf.as_str(),
+                        Span::set(start_pos, self.source.position()),
+                    ));
+                }
+            },
         }
         Ok(())
+    }
+
+    fn advance_unicode_escape(
+        &mut self,
+        buf: &str,
+        start_pos: Position,
+    ) -> Result<String, RatError> {
+        match self.read()? {
+            Some('{') => {}
+            _ => {
+                return Err(RatError::lexical(
+                    "expected '{' after '\\u' in unicode escape",
+                    buf,
+                    Span::set(start_pos, self.source.position()),
+                ))
+            }
+        }
+        let mut hex = String::new();
+        loop {
+            match self.read()? {
+                Some('}') => break,
+                Some(hch) if hch.is_ascii_hexdigit() => hex.push(hch),
+                Some(hch) => {
+                    return Err(RatError::lexical(
+                        format!("invalid hexadecimal digit in unicode escape: '{}'", hch),
+                        buf,
+                        Span::set(start_pos, self.source.position()),
+                    ))
+                }
+                None => {
+                    return Err(RatError::lexical(
+                        "unterminated unicode escape sequence",
+                        buf,
+                        Span::set(start_pos, self.source.position()),
+                    ))
+                }
+            }
+        }
+        if hex.is_empty() || hex.len() > 6 {
+            return Err(RatError::lexical(
+                format!(
+                    "unicode escape must be between 1 and 6 hex digits, got {}",
+                    hex.len()
+                ),
+                buf,
+                Span::set(start_pos, self.source.position()),
+            ));
+        }
+        let codepoint = u32::from_str_radix(&hex, 16).unwrap();
+        if codepoint > 0x10FFFF {
+            return Err(RatError::lexical(
+                format!("unicode codepoint out of range: U+{:X}", codepoint),
+                buf,
+                Span::set(start_pos, self.source.position()),
+            ));
+        }
+        if (0xD800..=0xDFFF).contains(&codepoint) {
+            return Err(RatError::lexical(
+                format!("unicode codepoint is a surrogate: U+{:X}", codepoint),
+                buf,
+                Span::set(start_pos, self.source.position()),
+            ));
+        }
+        Ok(format!("\\u{{{}}}", hex))
     }
 
     fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut buf = self.expect_opening_char('"', start_pos)?;
         loop {
-            let ch = match self.read()? {
-                Some(ch) => ch,
-                None => {
+            match self.peek()? {
+                None | Some('\n') | Some('\r') => {
                     return Err(RatError::lexical(
-                        "missing '\"' at the end of string literal",
+                        "unterminated string literal",
                         &buf,
                         Span::set(start_pos, self.source.position()),
                     ))
                 }
-            };
-            buf.push(ch);
-            match ch {
-                '\\' => self.advance_escape_sequence(&mut buf, start_pos)?,
-                '\"' => return self.emit(Category::Literal, buf, start_pos),
-                _ => {}
+                Some(_) => {
+                    let ch = self.read()?.unwrap();
+                    buf.push(ch);
+                    match ch {
+                        '"' => return self.emit(Category::Literal, buf, start_pos),
+                        '\\' => self.advance_escape_sequence(&mut buf, start_pos)?,
+                        _ => {}
+                    }
+                }
             }
         }
     }
@@ -137,43 +210,53 @@ impl Lexer {
     fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut buf = self.expect_opening_char('\'', start_pos)?;
-        let ch = match self.read()? {
-            Some(ch) => ch,
-            None => {
+        match self.peek()? {
+            None | Some('\n') | Some('\r') => {
                 return Err(RatError::lexical(
                     "unterminated character literal",
                     &buf,
                     Span::set(start_pos, self.source.position()),
                 ))
             }
-        };
-        match ch {
-            '\\' => {
-                self.advance_escape_sequence(&mut buf, start_pos)?;
-            }
-            '\'' => {
+            Some('\'') => {
+                self.read()?;
+                buf.push('\'');
                 return Err(RatError::lexical(
                     "empty character literal",
                     &buf,
                     Span::set(start_pos, self.source.position()),
                 ));
             }
-            _ => {
+            Some('\\') => {
+                self.read()?;
+                buf.push('\\');
+                self.advance_escape_sequence(&mut buf, start_pos)?;
+            }
+            Some(_) => {
+                let ch = self.read()?.unwrap();
                 buf.push(ch);
             }
         }
-        match self.read()? {
-            Some('\'') => self.emit(Category::Literal, buf, start_pos),
-            Some(_) => Err(RatError::lexical(
-                "character literal must contain exactly one character",
-                &buf,
-                Span::set(start_pos, self.source.position()),
-            )),
-            None => Err(RatError::lexical(
+        match self.peek()? {
+            Some('\'') => {
+                self.read()?;
+                buf.push('\'');
+                self.emit(Category::Literal, buf, start_pos)
+            }
+            None | Some('\n') | Some('\r') => Err(RatError::lexical(
                 "unterminated character literal",
                 &buf,
                 Span::set(start_pos, self.source.position()),
             )),
+            Some(_) => {
+                let bad = self.read()?.unwrap();
+                buf.push(bad);
+                Err(RatError::lexical(
+                    "character literal must contain exactly one character",
+                    &buf,
+                    Span::set(start_pos, self.source.position()),
+                ))
+            }
         }
     }
 
@@ -197,75 +280,10 @@ impl Lexer {
         }
     }
 
-    fn advance_unicode_escape(
-        &mut self,
-        partial: &str,
-        start_pos: Position,
-    ) -> Result<String, RatError> {
-        if !matches!(self.read()?, Some('{')) {
-            return Err(RatError::lexical(
-                "expected '{' after '\\u' in unicode escape",
-                partial,
-                Span::set(start_pos, self.source.position()),
-            ));
-        }
-        let mut hex = String::new();
-        loop {
-            match self.read()? {
-                Some('}') => break,
-                Some(hch) if hch.is_ascii_hexdigit() => hex.push(hch),
-                Some(hch) => {
-                    return Err(RatError::lexical(
-                        format!("invalid hexadecimal digit in unicode escape: '{}'", hch),
-                        partial,
-                        Span::set(start_pos, self.source.position()),
-                    ));
-                }
-                None => {
-                    return Err(RatError::lexical(
-                        "unterminated unicode escape sequence",
-                        partial,
-                        Span::set(start_pos, self.source.position()),
-                    ));
-                }
-            }
-        }
-        if hex.is_empty() || hex.len() > 6 {
-            return Err(RatError::lexical(
-                format!(
-                    "unicode escape must be between 1 and 6 hex digits, got {}",
-                    hex.len()
-                ),
-                partial,
-                Span::set(start_pos, self.source.position()),
-            ));
-        }
-        let codepoint = u32::from_str_radix(&hex, 16).unwrap();
-        if codepoint > 0x10FFFF {
-            return Err(RatError::lexical(
-                format!("unicode codepoint out of range: U+{:X}", codepoint),
-                partial,
-                Span::set(start_pos, self.source.position()),
-            ));
-        }
-        if (0xD800..=0xDFFF).contains(&codepoint) {
-            return Err(RatError::lexical(
-                format!("unicode codepoint is a surrogate: U+{:X}", codepoint),
-                partial,
-                Span::set(start_pos, self.source.position()),
-            ));
-        }
-        Ok(format!("\\u{{{}}}", hex))
-    }
-
     fn read_numerics(&mut self, buf: &mut String) -> Result<bool, RatError> {
         let mut read_any = false;
-        while let Some(ch) = self.peek()? {
-            if !ch.is_ascii_digit() {
-                break;
-            }
-            self.read()?;
-            buf.push(ch);
+        while matches!(self.peek()?, Some(ch) if ch.is_ascii_digit()) {
+            buf.push(self.read()?.unwrap());
             read_any = true;
         }
         Ok(read_any)
@@ -300,7 +318,7 @@ impl Lexer {
                         format!("unexpected character {:?} after numeric literal", ch),
                         &buf,
                         Span::set(start_pos, self.source.position()),
-                    ));
+                    ))
                 }
                 _ => return self.emit(Category::Literal, buf, start_pos),
             }
@@ -314,11 +332,8 @@ impl Lexer {
             Some('u') => {
                 self.read()?;
                 buf.push('u');
-                if let Some(ch) = self.peek()? {
-                    if Self::is_int_suffix(ch) {
-                        self.read()?;
-                        buf.push(ch);
-                    }
+                if matches!(self.peek()?, Some(ch) if Self::is_int_suffix(ch)) {
+                    buf.push(self.read()?.unwrap());
                 }
                 self.expect_delimiter_then_emit(Category::Literal, buf, start_pos)
             }
@@ -349,21 +364,6 @@ impl Lexer {
                 Span::set(start_pos, self.source.position()),
             )),
             _ => self.emit(category, partial, start_pos),
-        }
-    }
-
-    fn read_until_delimiter(&mut self) -> Result<String, RatError> {
-        let mut buf = String::new();
-        loop {
-            match self.peek()? {
-                Some(ch) if Category::is_delimiter(ch) => return Ok(buf),
-                None => return Ok(buf),
-                _ => {
-                    if let Some(ch) = self.read()? {
-                        buf.push(ch);
-                    }
-                }
-            }
         }
     }
 
@@ -402,11 +402,10 @@ impl Lexer {
         partial: String,
         start_pos: Position,
     ) -> Result<Option<Token>, RatError> {
-        let end_pos = self.source.position();
         Ok(Some(Token::new(
             category,
             partial,
-            Span::set(start_pos, end_pos),
+            Span::set(start_pos, self.source.position()),
         )))
     }
 }

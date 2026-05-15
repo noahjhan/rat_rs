@@ -1,14 +1,14 @@
 use crate::compiler::{Position, Span};
 use std::io;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ErrorInfo {
     pub err: String,
     pub value: String,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RatError {
     IoError(ErrorInfo),
     SourceError(ErrorInfo),

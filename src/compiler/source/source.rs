@@ -124,20 +124,24 @@ impl RatSource {
             return Ok(Some(b as char));
         }
 
-        let (width, mut cp) = self.decode_utf8_lead(b)?;
+        let width = match b.leading_ones() {
+            2 => 2,
+            3 => 3,
+            4 => 4,
+            _ => return Err(self.invalid_utf8(self.offset)),
+        };
 
-        for _ in 1..width {
+        let mut bytes = [b, 0, 0, 0];
+        for i in 1..width {
             let cont = self
                 .next_byte()?
                 .ok_or_else(|| self.invalid_utf8(self.offset))?;
-            if cont & 0xC0 != 0x80 {
-                return Err(self.invalid_utf8(self.offset));
-            }
-            cp = (cp << 6) | (cont & 0x3F) as u32;
+            bytes[i] = cont;
         }
 
-        let ch = char::from_u32(cp).ok_or_else(|| self.invalid_utf8(self.offset))?;
-        Ok(Some(ch))
+        let s = std::str::from_utf8(&bytes[..width]).map_err(|_| self.invalid_utf8(self.offset))?;
+
+        Ok(s.chars().next())
     }
 
     fn consume_char(&mut self, ch: char) {
@@ -147,15 +151,6 @@ impl RatSource {
             self.col = 1;
         } else {
             self.col += 1;
-        }
-    }
-
-    fn decode_utf8_lead(&self, b: u8) -> Result<(usize, u32), RatError> {
-        match b.leading_ones() {
-            2 => Ok((2, (b & 0x1F) as u32)),
-            3 => Ok((3, (b & 0x0F) as u32)),
-            4 => Ok((4, (b & 0x07) as u32)),
-            _ => Err(self.invalid_utf8(self.offset)),
         }
     }
 
