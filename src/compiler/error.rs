@@ -227,11 +227,11 @@ impl std::fmt::Display for RatError {
 
         let pos = self.span.start;
 
-        write!(f, "{kind} at {}:{}\n", pos.line, pos.col)?;
-
+        write!(f, "{kind}\n")?;
         if !self.value.is_empty() {
-            write!(f, "{}", self.value)?;
+            write!(f, "-> {}\n", self.value)?;
         }
+        write!(f, "line: {}, column {}", pos.line, pos.col)?;
 
         Ok(())
     }
