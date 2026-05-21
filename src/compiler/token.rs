@@ -28,8 +28,8 @@ impl Category {
         if ch == '"' || ch == '\'' {
             return true;
         }
-        if Self::is_punctuator_str(&ch.to_string()).is_some()
-            || Self::is_operator_str(&ch.to_string()).is_some()
+        if Self::is_punctuator_str(&String::from(ch)).is_some()
+            || Self::is_operator_str(&String::from(ch)).is_some()
             || ch.is_whitespace()
         {
             return true;

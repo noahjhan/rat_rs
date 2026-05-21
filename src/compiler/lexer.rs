@@ -104,7 +104,7 @@ impl Lexer {
             start_pos,
         )?;
 
-        let mut partial = "\"".to_string();
+        let mut partial = String::from("\"");
 
         loop {
             match self.peek()? {
@@ -147,7 +147,7 @@ impl Lexer {
             start_pos,
         )?;
 
-        let mut partial = "\'".to_string();
+        let mut partial = String::from("\'");
 
         match self.peek()? {
             Some('\n') | None => {
@@ -209,7 +209,7 @@ impl Lexer {
         // #[cfg(debug_assertions)]
         // self.verify_opening_char('\\', actual, start_pos)?;
         match self.read()? {
-            Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(ch.to_string()),
+            Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
             Some(ch) => Err(self.emit_error(
                 LexicalError::InvalidEscapeSequence(ch),
@@ -428,7 +428,7 @@ impl Lexer {
 
             return Err(self.emit_error(
                 LexicalError::UnexpectedChar(ch),
-                ch.to_string(),
+                String::from(ch),
                 start_pos,
             ));
         }

@@ -26,71 +26,54 @@ impl std::fmt::Display for LexicalError {
             Self::UnterminatedString => {
                 write!(f, "unterminated string literal")
             }
-
             Self::UnterminatedCharLiteral => {
                 write!(f, "unterminated character literal")
             }
-
             Self::UnterminatedEscapeSequence => {
                 write!(f, "unterminated escape sequence at EOF")
             }
-
             Self::UnterminatedUnicodeEscape => {
                 write!(f, "unterminated unicode escape sequence")
             }
-
             Self::EmptyCharLiteral => {
                 write!(f, "empty character literal")
             }
-
             Self::MultipleCharsInLiteral => {
                 write!(f, "character literal should only contain one character")
             }
-
             Self::NoDigitsInNumericLiteral => {
                 write!(f, "expected ascii digits in numeric literal")
             }
-
             Self::InvalidEscapeSequence(ch) => {
                 write!(f, "invalid escape sequence '\\{ch}'")
             }
-
             Self::InvalidUnicodeEscapeOpener(ch) => {
                 write!(f, "expected '{{' after '\\u' in unicode escape, got '{ch}'")
             }
-
             Self::InvalidUnicodeEscapeDigit(ch) => {
                 write!(f, "expected hex digit in unicode escape, got '{ch}'")
             }
-
             Self::InvalidUnicodeDigitCount(n) => {
                 write!(
                     f,
                     "unicode escape must include between 1 and 6 digits, got {n}"
                 )
             }
-
             Self::InvalidUnicodeCodepoint(cp) => {
                 write!(
                     f,
-                    "U+{cp:06X} is not a valid unicode codepoint, \
-                     max is U+10FFFF"
+                    "U+{cp:06X} is not a valid unicode codepoint, max is U+10FFFF"
                 )
             }
-
             Self::SurrogateCodepoint(cp) => {
                 write!(
                     f,
-                    "U+{cp:04X} is a surrogate codepoint and cannot \
-                     be used directly, surrogates are reserved for \
-                     internal UTF-16 encoding"
+                    "U+{cp:04X} is a surrogate codepoint and cannot be used directly, surrogates are reserved for internal UTF-16 encoding"
                 )
             }
-
             Self::UnexpectedChar(ch) => {
                 write!(f, "unexpected character '{ch}'")
             }
-
             Self::UnexpectedCharAfterNumeric(ch) => {
                 write!(f, "unexpected character '{ch}' after numeric literal")
             }
@@ -105,12 +88,10 @@ pub enum InternalError {
         expected: char,
         actual: char,
     },
-
     ExpectedGotEof {
         function_name: String,
         expected: char,
     },
-
     UnmatchedRegex {
         function_name: String,
         actual: String,
@@ -131,14 +112,12 @@ impl std::fmt::Display for InternalError {
                     function_name, expected, actual
                 )
             }
-
             Self::ExpectedGotEof {
                 function_name,
                 expected,
             } => {
                 write!(f, "in {:?} expected {:?}, got EOF", function_name, expected)
             }
-
             Self::UnmatchedRegex {
                 function_name,
                 actual,
@@ -180,7 +159,14 @@ impl RatError {
     pub fn source(message: impl Into<String>, value: impl Into<String>, span: Span) -> Self {
         RatError {
             kind: ErrorKind::Source,
-            value: format!("{}\n{}", message.into(), value.into()),
+            value: {
+                let m = message.into();
+                let v = value.into();
+                let mut out = String::from(m);
+                out.push('\n');
+                out.push_str(&v);
+                out
+            },
             span,
         }
     }
@@ -211,29 +197,28 @@ impl RatError {
 
 impl std::fmt::Display for RatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let kind = match &self.kind {
-            ErrorKind::Io => "io error".to_string(),
-
-            ErrorKind::Source => "source error".to_string(),
-
+        match &self.kind {
+            ErrorKind::Io => {
+                writeln!(f, "io error")?;
+            }
+            ErrorKind::Source => {
+                writeln!(f, "source error")?;
+            }
             ErrorKind::Lexical(err) => {
-                format!("lexical error: {}", err)
+                writeln!(f, "lexical error: {}", err)?;
             }
-
             ErrorKind::Internal(err) => {
-                format!("internal error: {}", err)
+                writeln!(f, "internal error: {}", err)?;
             }
-        };
+        }
+
+        if !self.value.is_empty() {
+            writeln!(f, "{}", self.value)?;
+            // writeln!(f, "^")?;
+        }
 
         let pos = self.span.start;
-
-        write!(f, "{kind}\n")?;
-        if !self.value.is_empty() {
-            write!(f, "-> {}\n", self.value)?;
-        }
-        write!(f, "line: {}, column {}", pos.line, pos.col)?;
-
-        Ok(())
+        write!(f, "line: {}, column {}", pos.line, pos.col)
     }
 }
 
