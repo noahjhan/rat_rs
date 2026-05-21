@@ -59,7 +59,8 @@ impl Lexer {
             Some('"') => self.advance_string_literal(),
             Some('\'') => self.advance_character_literal(),
             Some(ch) if ch.is_ascii_digit() => self.advance_numeric_literal(),
-            _ => self.advance_symbol_or_identifier(),
+            Some(ch) if ch.is_alphabetic() || ch == '_' => self.advance_keyword_or_identifier(),
+            _ => self.advance_operator_or_punctuator(),
         }
     }
 
@@ -285,33 +286,52 @@ impl Lexer {
         Ok(suffix)
     }
 
-    fn advance_symbol_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
+    fn advance_keyword_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
+        let start_pos = self.source.position();
+        let mut partial = String::new();
+
+        while let Some(ch) = self.peek()? {
+            if !ch.is_alphanumeric() && ch != '_' {
+                break;
+            }
+            partial.push(self.read()?.unwrap());
+        }
+
+        let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
+        Ok(Some(self.emit(category, partial, start_pos)))
+    }
+
+    fn advance_operator_or_punctuator(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut partial = String::new();
 
         loop {
-            let Some(ch) = self.read()? else {
-                if partial.is_empty() {
-                    return Ok(None);
-                }
-                let token = self.emit(Category::Identifier, partial, start_pos);
-                return Ok(Some(token));
-            };
-
-            partial.push(ch);
-
-            if let Some(category) = Category::is_any(&partial.clone()) {
-                let token = self.emit(category, partial, start_pos);
-                return Ok(Some(token));
+            let Some(ch) = self.peek()? else { break };
+            if ch.is_alphanumeric() || ch == '_' || (ch.is_whitespace() && ch != '\n') {
+                break;
             }
 
-            if matches!(self.peek()?, Some(ch) if Category::is_delimiter(ch))
-                || self.peek()?.is_none()
-            {
-                let token = self.emit(Category::Identifier, partial, start_pos);
-                return Ok(Some(token));
+            let mut extended = partial.clone();
+            extended.push(ch);
+
+            if Category::is_any(&extended).is_some() {
+                partial.push(self.read()?.unwrap());
+            } else {
+                break;
             }
         }
+
+        if partial.is_empty() {
+            let ch = self.read()?.unwrap();
+            return Err(self.emit_error(
+                format!("unexpected character {:?}", ch),
+                ch.to_string(),
+                start_pos,
+            ));
+        }
+
+        let category = Category::is_any(&partial).unwrap_or(Category::Invalid);
+        Ok(Some(self.emit(category, partial, start_pos)))
     }
 
     fn verify_opening_char(

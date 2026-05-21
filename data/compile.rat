@@ -4,6 +4,8 @@ fn foo(x: int): int {
   let y: int = x
   io::println(y)
 
+  let fnx: int = 10
+
   let z: float = 3.0f
   io::println(z)
 
