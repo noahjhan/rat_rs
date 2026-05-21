@@ -71,9 +71,9 @@ impl std::fmt::Display for RatError {
             ErrorKind::Internal => "internal error",
         };
         let pos = self.span.start;
-        write!(f, "{kind} at {}:{}: {}", pos.line, pos.col, self.message)?;
+        write!(f, "{kind} at {}:{}\n{}\n", pos.line, pos.col, self.message)?;
         if !self.value.is_empty() {
-            write!(f, " (near {:?})", self.value)?;
+            write!(f, "{}", self.value)?;
         }
         Ok(())
     }
