@@ -83,7 +83,7 @@ impl Category {
                 | "fn"
                 | "fn_"
                 | "fn?"
-                | "fn/"
+                | "fn\\"
                 | "ret"
                 | "rev"
                 | "if"
@@ -233,6 +233,8 @@ pub enum ConstituentOperator {
     Shr,
     Arrow,
     FatArrow,
+    ModuleAccess,
+    DotAccess,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
