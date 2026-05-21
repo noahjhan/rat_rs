@@ -4,73 +4,71 @@ use std::collections::VecDeque;
 
 pub struct Lexer {
     source: RatSource,
+    tokens: VecDeque<Token>,
     errors: Vec<RatError>,
-    poisoned: bool,
 }
 
 impl Lexer {
     pub fn init(source: RatSource) -> Self {
         Lexer {
             source,
+            tokens: VecDeque::new(),
             errors: Vec::new(),
-            poisoned: false,
         }
     }
 
-    pub fn get_tokens(&mut self) -> VecDeque<Result<Token, RatError>> {
-        std::iter::from_fn(|| self.next().transpose()).collect()
+    pub fn get_tokens(&self) -> &VecDeque<Token> {
+        &self.tokens
     }
 
-    pub fn errors(&self) -> &[RatError] {
+    pub fn get_errors(&self) -> &Vec<RatError> {
         &self.errors
     }
 
-    pub fn next(&mut self) -> Result<Option<Token>, RatError> {
-        if self.poisoned {
-            return Ok(None);
-        }
-        match self.advance_token() {
-            Err(err) if err.kind == ErrorKind::Lexical => {
-                let start = err.span.start;
-                let mut value = err.value.clone();
-                self.errors.push(err);
-
-                while !matches!(self.peek()?, Some('\n') | None) {
-                    value.push(self.read()?.unwrap());
+    pub fn advance_tokens(&mut self) -> Result<(), RatError> {
+        loop {
+            match self.advance_token() {
+                Ok(Some(token)) => {
+                    self.tokens.push_back(token.clone());
                 }
 
-                let span = Span::new(start, self.source.position());
-                Ok(Some(Token::new(Category::Invalid, value, span)))
+                Err(err) if err.kind == ErrorKind::Lexical => {
+                    let token = self.advance_lexical_error(err)?;
+                    self.tokens.push_back(token);
+                }
+
+                // treat Error::Kind{Io, Source} as fatal
+                Err(err) => {
+                    self.tokens.clear();
+                    self.errors.clear();
+                    return Err(err);
+                }
+                Ok(None) => return Ok(()),
             }
-            Err(err) => {
-                self.poisoned = true;
-                Err(err)
-            }
-            other => other,
         }
     }
 
-    fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
-        if !self.skip_non_newline_whitespace()? {
-            return Ok(None);
+    pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
+        match self.advance_whitespace()? {
+            Some(_) => {}
+            None => return Ok(None),
         }
+
         match self.peek()? {
             None => Ok(None),
             Some('"') => self.advance_string_literal(),
             Some('\'') => self.advance_character_literal(),
-            Some(ch) if ch.is_ascii_digit() => match self.advance_numeric_literal()? {
-                Some(token) => self.verify_numeric_literal(token),
-                None => Ok(None),
-            },
+            Some(ch) if ch.is_ascii_digit() => self.advance_numeric_literal(),
             _ => self.advance_symbol_or_identifier(),
         }
     }
 
-    fn skip_non_newline_whitespace(&mut self) -> Result<bool, RatError> {
+    fn advance_whitespace(&mut self) -> Result<Option<()>, RatError> {
         loop {
             match self.peek()? {
-                None => return Ok(false),
-                Some(ch) if !ch.is_whitespace() || ch == '\n' => return Ok(true),
+                None => return Ok(None),
+                // treat newline ('\n') as significant character
+                Some(ch) if !ch.is_whitespace() || ch == '\n' => return Ok(Some(())),
                 _ => {
                     self.source.read()?;
                 }
@@ -78,184 +76,33 @@ impl Lexer {
         }
     }
 
-    fn advance_symbol_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
-        let start = self.source.position();
-        let mut buf = String::new();
-
-        loop {
-            let Some(ch) = self.read()? else {
-                return self.emit_identifier_or_none(buf, start);
-            };
-            buf.push(ch);
-
-            if self.next_char_extends_token(&buf)? {
-                continue;
-            }
-
-            if let Some(category) = Category::is_any(&buf) {
-                return self.emit(category, buf, start);
-            }
-
-            if matches!(self.peek()?, Some(ch) if Category::is_delimiter(ch))
-                || self.peek()?.is_none()
-            {
-                return self.emit(Category::Identifier, buf, start);
-            }
-        }
-    }
-
-    fn emit_identifier_or_none(
-        &mut self,
-        buf: String,
-        start: Position,
-    ) -> Result<Option<Token>, RatError> {
-        if buf.is_empty() {
-            Ok(None)
-        } else {
-            self.emit(Category::Identifier, buf, start)
-        }
-    }
-
-    fn next_char_extends_token(&mut self, partial: &str) -> Result<bool, RatError> {
-        let Some(ch) = self.peek()? else {
-            return Ok(false);
-        };
-
-        let mut tmp = [0u8; 32];
-        let base = partial.as_bytes();
-        let ch_len = ch.len_utf8();
-        if base.len() + ch_len <= tmp.len() {
-            tmp[..base.len()].copy_from_slice(base);
-            ch.encode_utf8(&mut tmp[base.len()..]);
-            let extended = std::str::from_utf8(&tmp[..base.len() + ch_len]).unwrap();
-            Ok(Category::is_any(extended).is_some())
-        } else {
-            let mut s = partial.to_owned();
-            s.push(ch);
-            Ok(Category::is_any(&s).is_some())
-        }
-    }
-
-    fn verify_numeric_literal(&mut self, token: Token) -> Result<Option<Token>, RatError> {
-        let re = Regex::new(r"(\d+)(((\.(\d+))?(d|f)?)|(u)?[icls]?)?$").unwrap();
-        if re.is_match(&token.value) {
-            return Ok(Some(token));
-        }
-
-        return Err(RatError::internal(
-            "advance_numeric_literal() did not match numeric literal regex specification",
-            token.value,
-            token.span,
-        ));
-    }
-
-    fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
-        let start = self.source.position();
-        let mut buf = String::new();
-
-        if !self.read_ascii_digits(&mut buf)? {
-            return Err(RatError::internal(
-                "advance_numeric_literal() no leading numeric digit",
-                &buf,
-                Span::new(start, self.source.position()),
-            ));
-        }
-
-        if matches!(self.peek()?, Some('.')) {
-            self.read()?;
-            buf.push('.');
-            if !self.read_ascii_digits(&mut buf)? {
-                return Err(RatError::lexical(
-                    "expected digits after '.' in numeric literal",
-                    &buf,
-                    Span::new(start, self.source.position()),
-                ));
-            }
-            return self.emit_numeric_suffix(&mut buf, start, true);
-        }
-
-        self.emit_numeric_suffix(&mut buf, start, false)
-    }
-
-    fn emit_numeric_suffix(
-        &mut self,
-        buf: &mut String,
-        start: Position,
-        is_float: bool,
-    ) -> Result<Option<Token>, RatError> {
-        let is_int_suffix = |ch: char| matches!(ch, 'i' | 'c' | 'l' | 's');
-
-        match self.peek()? {
-            Some(ch @ ('d' | 'f')) => {
-                self.read()?;
-                buf.push(ch);
-                self.expect_delimiter_then_emit(buf.clone(), start)
-            }
-            Some('u') if !is_float => {
-                self.read()?;
-                buf.push('u');
-                if matches!(self.peek()?, Some(ch) if is_int_suffix(ch)) {
-                    buf.push(self.read()?.unwrap());
-                }
-                self.expect_delimiter_then_emit(buf.clone(), start)
-            }
-            Some(ch) if !is_float && is_int_suffix(ch) => {
-                self.read()?;
-                buf.push(ch);
-                self.expect_delimiter_then_emit(buf.clone(), start)
-            }
-            Some(ch) if !Category::is_delimiter(ch) => Err(RatError::lexical(
-                format!("unexpected character {:?} after numeric literal", ch),
-                buf.as_str(),
-                Span::new(start, self.source.position()),
-            )),
-            _ => self.emit(Category::Literal, buf.clone(), start),
-        }
-    }
-
-    fn expect_delimiter_then_emit(
-        &mut self,
-        buf: String,
-        start: Position,
-    ) -> Result<Option<Token>, RatError> {
-        match self.peek()? {
-            Some(ch) if !Category::is_delimiter(ch) => Err(RatError::lexical(
-                format!("unexpected character {:?} after numeric literal", ch),
-                &buf,
-                Span::new(start, self.source.position()),
-            )),
-            _ => self.emit(Category::Literal, buf, start),
-        }
-    }
-
-    fn read_ascii_digits(&mut self, buf: &mut String) -> Result<bool, RatError> {
-        let mut any = false;
-        while matches!(self.peek()?, Some(ch) if ch.is_ascii_digit()) {
-            buf.push(self.read()?.unwrap());
-            any = true;
-        }
-        Ok(any)
-    }
-
     fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
-        let start = self.source.position();
-        let mut buf = self.expect_opening_char('"', start)?;
+        let start_pos = self.source.position();
+
+        let actual = self.read()?;
+        #[cfg(debug_assertions)]
+        self.verify_opening_char('"', actual, start_pos)?;
+
+        let mut partial = "\"".to_string();
 
         loop {
             match self.peek()? {
-                None | Some('\n') | Some('\r') => {
-                    return Err(RatError::lexical(
-                        "unterminated string literal",
-                        &buf,
-                        Span::new(start, self.source.position()),
-                    ))
+                Some('\n') | None => {
+                    return Err(self.emit_error("unterminated string literal", partial, start_pos));
                 }
+
                 Some(_) => {
                     let ch = self.read()?.unwrap();
-                    buf.push(ch);
+                    partial.push(ch);
                     match ch {
-                        '"' => return self.emit(Category::Literal, buf, start),
-                        '\\' => self.advance_escape_sequence(&mut buf, start)?,
+                        '"' => {
+                            let token = self.emit(Category::Literal, partial, start_pos);
+                            return Ok(Some(token));
+                        }
+                        '\\' => {
+                            let sequence = self.read_escape_sequence(partial.clone(), start_pos)?;
+                            partial.push_str(&sequence)
+                        }
                         _ => {}
                     }
                 }
@@ -264,161 +111,257 @@ impl Lexer {
     }
 
     fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
-        let start = self.source.position();
-        let mut buf = self.expect_opening_char('\'', start)?;
+        let start_pos = self.source.position();
+
+        let actual = self.read()?;
+        #[cfg(debug_assertions)]
+        self.verify_opening_char('\'', actual, start_pos)?;
+
+        let mut partial = "\'".to_string();
 
         match self.peek()? {
-            None | Some('\n') | Some('\r') => {
-                return Err(RatError::lexical(
-                    "unterminated character literal",
-                    &buf,
-                    Span::new(start, self.source.position()),
-                ))
+            Some('\n') | None => {
+                return Err(self.emit_error("unterminated character literal", partial, start_pos));
             }
+
             Some('\'') => {
-                buf.push(self.read()?.unwrap());
-                return Err(RatError::lexical(
-                    "empty character literal",
-                    &buf,
-                    Span::new(start, self.source.position()),
+                partial.push(self.read()?.unwrap());
+                return Err(self.emit_error("empty character literal", partial, start_pos));
+            }
+
+            Some('\\') => {
+                let sequence = self.read_escape_sequence(partial.clone(), start_pos)?;
+                partial.push_str(&sequence)
+            }
+
+            Some(_) => {
+                partial.push(self.read()?.unwrap());
+            }
+        }
+
+        match self.peek()? {
+            Some('\n') | None => {
+                return Err(self.emit_error("unterminated character literal", partial, start_pos));
+            }
+
+            Some('\'') => {
+                partial.push(self.read()?.unwrap());
+                let token = self.emit(Category::Literal, partial, start_pos);
+                Ok(Some(token))
+            }
+
+            Some(_) => {
+                partial.push(self.read()?.unwrap());
+                return Err(self.emit_error(
+                    "character literal should only contain one character",
+                    partial,
+                    start_pos,
                 ));
             }
-            Some('\\') => {
-                buf.push(self.read()?.unwrap());
-                self.advance_escape_sequence(&mut buf, start)?;
-            }
-            Some(_) => {
-                buf.push(self.read()?.unwrap());
-            }
         }
+    }
+
+    fn read_escape_sequence(
+        &mut self,
+        partial: String,
+        start_pos: Position,
+    ) -> Result<String, RatError> {
+        let actual = self.read()?;
+        #[cfg(debug_assertions)]
+        self.verify_opening_char('\\', actual, start_pos)?;
+        match self.read()? {
+            Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(format!("\\{}", ch)),
+            Some('u') => Ok(format!(
+                "\\u{}",
+                self.read_unicode_escape(partial, start_pos)?
+            )),
+            Some(ch) => Err(self.emit_error(
+                format!("invalid escape sequence '\\{}'", ch),
+                format!("{}\\{}", partial, ch),
+                start_pos,
+            )),
+            None => Err(self.emit_error(
+                "unterminated escape sequence at EOF",
+                format!("{}\\", partial),
+                start_pos,
+            )),
+        }
+    }
+
+    fn read_unicode_escape(
+        &mut self,
+        partial: String,
+        start_pos: Position,
+    ) -> Result<String, RatError> {
+        let span = Span::new(start_pos, self.source.position());
+        Err(RatError::internal(
+            "advance_unicode_escape() unimplemented",
+            partial,
+            span,
+        ))
+    }
+
+    fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
+        let start_pos = self.source.position();
+        let mut partial = String::new();
+        let prefix = self.read_digits(partial.clone(), start_pos)?;
+        partial.push_str(&prefix);
+
+        let mut is_floating_type = false;
+
+        if matches!(self.peek()?, Some('.')) {
+            is_floating_type = true;
+            partial.push(self.read()?.unwrap());
+            let suffix = self.read_digits(partial.clone(), start_pos)?;
+            partial.push_str(&suffix);
+        }
+
+        let suffix = self.read_numeric_suffix(is_floating_type, partial.clone(), start_pos)?;
+        partial.push_str(&suffix);
+
+        let token = self.emit(Category::Literal, partial, start_pos);
+
+        #[cfg(debug_assertions)]
+        self.verify_numeric_literal(&token)?;
+
+        Ok(Some(token))
+    }
+
+    fn read_digits(&mut self, partial: String, start_pos: Position) -> Result<String, RatError> {
+        let mut digits = String::new();
+
+        while let Some(ch) = self.peek()? {
+            if !ch.is_ascii_digit() {
+                break;
+            }
+            digits.push(self.read()?.unwrap());
+        }
+
+        #[cfg(debug_assertions)]
+        if digits.is_empty() {
+            return Err(self.emit_error(
+                "advance_digits() returned no ascii digit",
+                format!("{:?}{:?}", partial, digits),
+                start_pos,
+            ));
+        }
+
+        Ok(digits)
+    }
+
+    fn read_numeric_suffix(
+        &mut self,
+        is_floating_type: bool,
+        partial: String,
+        start_pos: Position,
+    ) -> Result<String, RatError> {
+        let is_integral_type = |ch: char| matches!(ch, 'i' | 'c' | 'l' | 's');
+        let mut suffix = String::new();
 
         match self.peek()? {
-            Some('\'') => {
-                buf.push(self.read()?.unwrap());
-                self.emit(Category::Literal, buf, start)
+            Some('d' | 'f') => {
+                suffix.push(self.read()?.unwrap());
             }
-            None | Some('\n') | Some('\r') => Err(RatError::lexical(
-                "unterminated character literal",
-                &buf,
-                Span::new(start, self.source.position()),
-            )),
-            Some(_) => {
-                buf.push(self.read()?.unwrap());
-                Err(RatError::lexical(
-                    "character literal should contain only one character",
-                    &buf,
-                    Span::new(start, self.source.position()),
+            Some('u') if !is_floating_type => {
+                suffix.push(self.read()?.unwrap());
+                if matches!(self.peek()?, Some(ch) if is_integral_type(ch)) {
+                    suffix.push(self.read()?.unwrap());
+                }
+            }
+            Some(ch) if !is_floating_type && is_integral_type(ch) => {
+                suffix.push(self.read()?.unwrap());
+            }
+
+            Some(ch) if !Category::is_delimiter(ch) => {
+                return Err(self.emit_error(
+                    format!("unexpected character {:?} after numeric literal", ch),
+                    format!("{:?}{:?}", partial, suffix),
+                    start_pos,
                 ))
+            }
+            _ => {}
+        };
+
+        Ok(suffix)
+    }
+
+    fn advance_symbol_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
+        let start_pos = self.source.position();
+        let mut partial = String::new();
+
+        loop {
+            let Some(ch) = self.read()? else {
+                if partial.is_empty() {
+                    return Ok(None);
+                }
+                let token = self.emit(Category::Identifier, partial, start_pos);
+                return Ok(Some(token));
+            };
+
+            partial.push(ch);
+
+            if let Some(category) = Category::is_any(&partial.clone()) {
+                let token = self.emit(category, partial, start_pos);
+                return Ok(Some(token));
+            }
+
+            if matches!(self.peek()?, Some(ch) if Category::is_delimiter(ch))
+                || self.peek()?.is_none()
+            {
+                let token = self.emit(Category::Identifier, partial, start_pos);
+                return Ok(Some(token));
             }
         }
     }
 
-    fn advance_escape_sequence(
+    fn verify_opening_char(
         &mut self,
-        buf: &mut String,
+        expected: char,
+        actual: Option<char>,
         start: Position,
     ) -> Result<(), RatError> {
-        let ch = self.read()?.ok_or_else(|| {
-            RatError::lexical(
-                "unterminated escape sequence at EOF",
-                buf.as_str(),
-                Span::new(start, self.source.position()),
-            )
-        })?;
-        buf.push(ch);
-        match ch {
-            '\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0' => {}
-            'u' => {
-                let s = self.advance_unicode_escape(buf, start)?;
-                buf.push_str(&s);
-            }
-            _ => {
-                return Err(RatError::lexical(
-                    format!("invalid escape sequence: '\\{}'", ch),
-                    buf.as_str(),
-                    Span::new(start, self.source.position()),
-                ))
-            }
-        }
-        Ok(())
-    }
+        match actual {
+            Some(ch) if ch == expected => Ok(()),
 
-    fn advance_unicode_escape(&mut self, buf: &str, start: Position) -> Result<String, RatError> {
-        if !matches!(self.read()?, Some('{')) {
-            return Err(RatError::lexical(
-                "expected '{' after '\\u' in unicode escape",
-                buf,
-                Span::new(start, self.source.position()),
-            ));
-        }
-
-        let mut hex = String::with_capacity(6);
-        loop {
-            match self.read()? {
-                Some('}') => break,
-                Some(ch) if ch.is_ascii_hexdigit() => hex.push(ch),
-                Some(ch) => {
-                    return Err(RatError::lexical(
-                        format!("invalid hex digit in unicode escape: {:?}", ch),
-                        buf,
-                        Span::new(start, self.source.position()),
-                    ))
-                }
-                None => {
-                    return Err(RatError::lexical(
-                        "unterminated unicode escape sequence",
-                        buf,
-                        Span::new(start, self.source.position()),
-                    ))
-                }
-            }
-        }
-
-        if hex.is_empty() || hex.len() > 6 {
-            return Err(RatError::lexical(
-                format!("unicode escape must be 1–6 hex digits, got {}", hex.len()),
-                buf,
-                Span::new(start, self.source.position()),
-            ));
-        }
-
-        let codepoint = u32::from_str_radix(&hex, 16).unwrap();
-
-        if codepoint > 0x10_FFFF {
-            return Err(RatError::lexical(
-                format!("unicode codepoint out of range: U+{:06X}", codepoint),
-                buf,
-                Span::new(start, self.source.position()),
-            ));
-        }
-        if (0xD800..=0xDFFF).contains(&codepoint) {
-            return Err(RatError::lexical(
-                format!(
-                    "unicode surrogate codepoint is not allowed: U+{:04X}",
-                    codepoint
-                ),
-                buf,
-                Span::new(start, self.source.position()),
-            ));
-        }
-
-        Ok(format!("\\u{{{}}}", hex))
-    }
-
-    fn expect_opening_char(&mut self, expected: char, start: Position) -> Result<String, RatError> {
-        match self.read()? {
-            Some(ch) if ch == expected => Ok(ch.to_string()),
             Some(ch) => Err(RatError::internal(
                 format!("expected {:?}, got {:?}", expected, ch),
                 "",
                 Span::new(start, self.source.position()),
             )),
+
             None => Err(RatError::internal(
                 format!("expected {:?}, got EOF", expected),
                 "",
                 Span::new(start, self.source.position()),
             )),
         }
+    }
+
+    fn verify_numeric_literal(&mut self, token: &Token) -> Result<(), RatError> {
+        let re = Regex::new(r"\d+((\.\d+)?[df]?|u?[icls]?)").unwrap();
+        if re.is_match(&token.value) {
+            return Ok(());
+        }
+
+        return Err(RatError::internal(
+            "advance_numeric_literal() did not match numeric literal regex specification",
+            token.value.clone(),
+            token.span,
+        ));
+    }
+
+    fn advance_lexical_error(&mut self, err: RatError) -> Result<Token, RatError> {
+        let start_pos = err.span.start;
+        let mut value = err.value.clone();
+        self.errors.push(err);
+
+        while !matches!(self.peek()?, Some('\n') | None) {
+            value.push(self.read()?.unwrap());
+        }
+
+        let span = Span::new(start_pos, self.source.position());
+        let token = Token::new(Category::Invalid, value, span);
+        Ok(token)
     }
 
     #[inline]
@@ -431,16 +374,21 @@ impl Lexer {
         self.source.peek()
     }
 
-    fn emit(
+    #[inline]
+    fn emit(&mut self, category: Category, value: String, start: Position) -> Token {
+        Token::new(category, value, Span::new(start, self.source.position()))
+    }
+
+    fn emit_error(
         &mut self,
-        category: Category,
-        value: String,
+        message: impl Into<String>,
+        value: impl Into<String>,
         start: Position,
-    ) -> Result<Option<Token>, RatError> {
-        Ok(Some(Token::new(
-            category,
-            value,
+    ) -> RatError {
+        RatError::lexical(
+            message,
+            value.into(),
             Span::new(start, self.source.position()),
-        )))
+        )
     }
 }

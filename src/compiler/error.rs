@@ -1,7 +1,7 @@
 use crate::compiler::{Position, Span};
 use std::io;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RatError {
     pub kind: ErrorKind,
     pub message: String,

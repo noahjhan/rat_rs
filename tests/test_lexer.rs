@@ -23,7 +23,7 @@ fn test_advance_string_literal() {
     );
 
     let actual_first = lexer
-        .next()
+        .advance_token()
         .expect("advance returned an error")
         .expect("advance returned None before first token");
 
@@ -58,7 +58,7 @@ fn test_advance_string_literal() {
     );
 
     let actual_second = lexer
-        .next()
+        .advance_token()
         .expect("advance returned an error")
         .expect("advance returned None before newline token");
 
@@ -75,7 +75,7 @@ fn test_advance_string_literal() {
         "wrong span for second token"
     );
 
-    match lexer.next() {
+    match lexer.advance_token() {
         Ok(None) => {}
         Ok(Some(tok)) => panic!("expected EOF but got token {:?}", tok),
         Err(err) => panic!("expected EOF but got error {:?}", err),
