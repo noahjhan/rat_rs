@@ -1,4 +1,6 @@
-use crate::compiler::{Category, ErrorKind, Position, RatError, RatSource, Span, Token};
+use crate::compiler::{
+    Category, ErrorKind, InternalError, LexicalError, Position, RatError, RatSource, Span, Token,
+};
 use std::collections::VecDeque;
 
 /// TODO: finish read_unicode_escape()
@@ -45,7 +47,7 @@ impl Lexer {
                     self.tokens.push_back(token.clone());
                 }
 
-                Err(err) if err.kind == ErrorKind::Lexical => {
+                Err(err) if matches!(err.kind, ErrorKind::Lexical(_)) => {
                     let token = self.advance_lexical_error(err)?;
                     self.tokens.push_back(token);
                 }
@@ -95,14 +97,23 @@ impl Lexer {
 
         let actual = self.read()?;
         #[cfg(debug_assertions)]
-        self.verify_opening_char('"', actual, start_pos)?;
+        self.verify_opening_char(
+            String::from("advance_string_literal()"),
+            '"',
+            actual,
+            start_pos,
+        )?;
 
         let mut partial = "\"".to_string();
 
         loop {
             match self.peek()? {
                 Some('\n') | None => {
-                    return Err(self.emit_error("unterminated string literal", partial, start_pos));
+                    return Err(self.emit_error(
+                        LexicalError::UnterminatedString,
+                        partial,
+                        start_pos,
+                    ));
                 }
 
                 Some(_) => {
@@ -129,18 +140,27 @@ impl Lexer {
 
         let actual = self.read()?;
         #[cfg(debug_assertions)]
-        self.verify_opening_char('\'', actual, start_pos)?;
+        self.verify_opening_char(
+            String::from("advance_character_literal()"),
+            '\'',
+            actual,
+            start_pos,
+        )?;
 
         let mut partial = "\'".to_string();
 
         match self.peek()? {
             Some('\n') | None => {
-                return Err(self.emit_error("unterminated character literal", partial, start_pos));
+                return Err(self.emit_error(
+                    LexicalError::UnterminatedCharLiteral,
+                    partial,
+                    start_pos,
+                ));
             }
 
             Some('\'') => {
                 partial.push(self.read()?.unwrap());
-                return Err(self.emit_error("empty character literal", partial, start_pos));
+                return Err(self.emit_error(LexicalError::EmptyCharLiteral, partial, start_pos));
             }
 
             Some('\\') => {
@@ -156,7 +176,11 @@ impl Lexer {
 
         match self.peek()? {
             Some('\n') | None => {
-                return Err(self.emit_error("unterminated character literal", partial, start_pos));
+                return Err(self.emit_error(
+                    LexicalError::UnterminatedCharLiteral,
+                    partial,
+                    start_pos,
+                ));
             }
 
             Some('\'') => {
@@ -168,7 +192,7 @@ impl Lexer {
             Some(_) => {
                 partial.push(self.read()?.unwrap());
                 return Err(self.emit_error(
-                    "character literal should only contain one character",
+                    LexicalError::MultipleCharsInLiteral,
                     partial,
                     start_pos,
                 ));
@@ -188,11 +212,13 @@ impl Lexer {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(ch.to_string()),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
             Some(ch) => Err(self.emit_error(
-                format!("invalid escape sequence '\\{}'", ch),
+                LexicalError::InvalidEscapeSequence(ch),
                 format!("{}{}", partial, ch),
                 start_pos,
             )),
-            None => Err(self.emit_error("unterminated escape sequence at EOF", partial, start_pos)),
+            None => {
+                Err(self.emit_error(LexicalError::UnterminatedEscapeSequence, partial, start_pos))
+            }
         }
     }
 
@@ -207,14 +233,14 @@ impl Lexer {
             Some('{') => sequence.push('{'),
             Some(ch) => {
                 return Err(self.emit_error(
-                    format!("expected '{{' after '\\u' in unicode escape, got '{}'", ch),
+                    LexicalError::InvalidUnicodeEscapeOpener(ch),
                     format!("{}{}", partial, ch),
                     start_pos,
                 ));
             }
             None => {
                 return Err(self.emit_error(
-                    "unterminated unicode escape sequence",
+                    LexicalError::UnterminatedUnicodeEscape,
                     partial,
                     start_pos,
                 ));
@@ -234,7 +260,7 @@ impl Lexer {
 
                 Some(ch) => {
                     return Err(self.emit_error(
-                        format!("expected hex digit in unicode escape, got '{}'", ch),
+                        LexicalError::InvalidUnicodeEscapeDigit(ch),
                         format!("{}{}{}", partial, sequence, ch),
                         start_pos,
                     ))
@@ -242,7 +268,7 @@ impl Lexer {
 
                 None => {
                     return Err(self.emit_error(
-                        "unterminated unicode escape sequence",
+                        LexicalError::UnterminatedUnicodeEscape,
                         format!("{}{}", partial, sequence),
                         start_pos,
                     ))
@@ -254,10 +280,7 @@ impl Lexer {
 
         if hex.is_empty() || hex.len() > 6 {
             return Err(self.emit_error(
-                format!(
-                    "unicode escape must include between 1 and 6 digits, got {}",
-                    hex.len()
-                ),
+                LexicalError::InvalidUnicodeDigitCount(hex.len()),
                 format!("{}{}", partial, sequence),
                 start_pos,
             ));
@@ -267,10 +290,7 @@ impl Lexer {
 
         if codepoint > 0x10_FFFF {
             return Err(self.emit_error(
-                format!(
-                    "U+{:06X} is not a valid unicode codepoint, max is U+10FFFF",
-                    codepoint
-                ),
+                LexicalError::InvalidUnicodeCodepoint(codepoint),
                 format!("{}{}", partial, sequence),
                 start_pos,
             ));
@@ -278,10 +298,7 @@ impl Lexer {
 
         if (0xD800..=0xDFFF).contains(&codepoint) {
             return Err(self.emit_error(
-                format!(
-                    "U+{:04X} is a surrogate codepoint and cannot be used directly, surrogates are reserved for internal UTF-16 encoding",
-                    codepoint
-                ),
+                LexicalError::SurrogateCodepoint(codepoint),
                 format!("{}{}", partial, sequence),
                 start_pos,
             ));
@@ -314,26 +331,18 @@ impl Lexer {
         let token = self.emit(Category::Literal, partial, start_pos);
 
         #[cfg(debug_assertions)]
-        self.verify_numeric_literal(&token)?;
+        self.verify_numeric_literal(String::from("advance_numeric_literal()"), &token)?;
 
         Ok(Some(token))
     }
 
     fn read_digits(&mut self, partial: String, start_pos: Position) -> Result<String, RatError> {
         let mut digits = String::new();
+        self.accumulate(&mut digits, |ch| ch.is_ascii_digit())?;
 
-        while let Some(ch) = self.peek()? {
-            if !ch.is_ascii_digit() {
-                break;
-            }
-
-            digits.push(self.read()?.unwrap());
-        }
-
-        #[cfg(debug_assertions)]
         if digits.is_empty() {
             return Err(self.emit_error(
-                "advance_digits() returned no ascii digit",
+                LexicalError::NoDigitsInNumericLiteral,
                 format!("{}{}", partial, digits),
                 start_pos,
             ));
@@ -370,7 +379,7 @@ impl Lexer {
 
             Some(ch) if !Category::is_delimiter(ch) => {
                 return Err(self.emit_error(
-                    format!("unexpected character '{}' after numeric literal", ch),
+                    LexicalError::UnexpectedCharAfterNumeric(ch),
                     format!("{}{}{}", partial, suffix, ch),
                     start_pos,
                 ))
@@ -386,13 +395,7 @@ impl Lexer {
         let start_pos = self.source.position();
         let mut partial = String::new();
 
-        while let Some(ch) = self.peek()? {
-            if !ch.is_alphanumeric() && ch != '_' {
-                break;
-            }
-
-            partial.push(self.read()?.unwrap());
-        }
+        self.accumulate(&mut partial, |ch| ch.is_alphanumeric() || ch == '_')?;
 
         let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
 
@@ -424,7 +427,7 @@ impl Lexer {
             let ch = self.read()?.unwrap();
 
             return Err(self.emit_error(
-                format!("unexpected character '{}'", ch),
+                LexicalError::UnexpectedChar(ch),
                 ch.to_string(),
                 start_pos,
             ));
@@ -437,6 +440,7 @@ impl Lexer {
 
     fn verify_opening_char(
         &mut self,
+        function_name: String,
         expected: char,
         actual: Option<char>,
         start: Position,
@@ -445,20 +449,31 @@ impl Lexer {
             Some(ch) if ch == expected => Ok(()),
 
             Some(ch) => Err(RatError::internal(
-                format!("expected {:?}, got {:?}", expected, ch),
+                InternalError::ExpectedGot {
+                    function_name,
+                    expected,
+                    actual: ch,
+                },
                 "",
                 Span::new(start, self.source.position()),
             )),
 
             None => Err(RatError::internal(
-                format!("expected {:?}, got EOF", expected),
+                InternalError::ExpectedGotEof {
+                    function_name,
+                    expected,
+                },
                 "",
                 Span::new(start, self.source.position()),
             )),
         }
     }
 
-    fn verify_numeric_literal(&mut self, token: &Token) -> Result<(), RatError> {
+    fn verify_numeric_literal(
+        &mut self,
+        function_name: String,
+        token: &Token,
+    ) -> Result<(), RatError> {
         use std::sync::OnceLock;
 
         // use static to avoid recompilation per numeric literal
@@ -471,7 +486,10 @@ impl Lexer {
         }
 
         Err(RatError::internal(
-            "advance_numeric_literal() did not match numeric literal regex specification",
+            InternalError::UnmatchedRegex {
+                function_name,
+                actual: token.value.clone(),
+            },
             token.value.clone(),
             token.span,
         ))
@@ -495,6 +513,25 @@ impl Lexer {
     }
 
     #[inline]
+    fn accumulate(
+        &mut self,
+        partial: &mut String,
+        pred: impl Fn(char) -> bool,
+    ) -> Result<usize, RatError> {
+        let mut chars_read = 0;
+
+        while let Some(ch) = self.source.peek()? {
+            if !pred(ch) {
+                break;
+            }
+            partial.push(self.source.read()?.unwrap());
+            chars_read += 1;
+        }
+
+        Ok(chars_read)
+    }
+
+    #[inline]
     fn read(&mut self) -> Result<Option<char>, RatError> {
         self.source.read()
     }
@@ -512,14 +549,10 @@ impl Lexer {
     #[inline]
     fn emit_error(
         &mut self,
-        message: impl Into<String>,
+        err: LexicalError,
         value: impl Into<String>,
         start: Position,
     ) -> RatError {
-        RatError::lexical(
-            message,
-            value.into(),
-            Span::new(start, self.source.position()),
-        )
+        RatError::lexical(err, value.into(), Span::new(start, self.source.position()))
     }
 }
