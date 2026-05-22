@@ -9,7 +9,7 @@ mod token;
 
 pub use ast::{Ast, Expr, Parameter};
 pub use compile::compile;
-pub use error::{ErrorKind, InternalError, LexicalError, ParseError, RatError};
+pub use error::{ErrorKind, LexicalError, ParseError, RatError};
 pub use lexer::Lexer;
 pub use parser::Parser;
 pub use source::RatSource;

@@ -2,6 +2,108 @@ use crate::compiler::{Position, Span};
 use std::io;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorKind {
+    Io,
+    Source,
+    Lexical(LexicalError),
+    Parse(ParseError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RatError {
+    pub kind: ErrorKind,
+    pub value: String,
+    pub span: Span,
+}
+
+impl RatError {
+    pub fn io(_err: io::Error, span: Span) -> Self {
+        Self {
+            kind: ErrorKind::Io,
+            value: String::new(),
+            span,
+        }
+    }
+
+    pub fn source(message: impl Into<String>, value: impl Into<String>, span: Span) -> Self {
+        let message = message.into();
+        let value = value.into();
+
+        Self {
+            kind: ErrorKind::Source,
+            value: format!("{message}\n{value}"),
+            span,
+        }
+    }
+
+    pub fn lexical(err: LexicalError, value: impl Into<String>, span: Span) -> Self {
+        Self {
+            kind: ErrorKind::Lexical(err),
+            value: value.into(),
+            span,
+        }
+    }
+
+    pub fn parse(err: ParseError, value: impl Into<String>, span: Span) -> Self {
+        Self {
+            kind: ErrorKind::Parse(err),
+            value: value.into(),
+            span,
+        }
+    }
+
+    pub fn is_fatal(&self) -> bool {
+        matches!(self.kind, ErrorKind::Io | ErrorKind::Source)
+    }
+}
+
+impl std::fmt::Display for RatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            ErrorKind::Io => {
+                writeln!(f, "io error")?;
+            }
+            ErrorKind::Source => {
+                writeln!(f, "source error")?;
+            }
+            ErrorKind::Lexical(err) => {
+                writeln!(f, "lexical error: {}", err)?;
+            }
+            ErrorKind::Parse(err) => {
+                writeln!(f, "parse error: {}", err)?;
+            }
+        }
+
+        if !self.value.is_empty() {
+            writeln!(f, "{}", self.value)?;
+        }
+
+        let pos = self.span.start_pos;
+
+        write!(f, "line: {}, column {}", pos.line, pos.col)
+    }
+}
+
+impl std::error::Error for RatError {}
+
+impl From<io::Error> for RatError {
+    fn from(err: io::Error) -> Self {
+        let zero = Position {
+            line: 0,
+            col: 0,
+            offset: 0,
+        };
+
+        let span = Span {
+            start_pos: zero,
+            end_pos: zero,
+        };
+
+        Self::io(err, span)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexicalError {
     UnterminatedString,
     UnterminatedCharLiteral,
@@ -95,190 +197,7 @@ impl std::fmt::Display for ParseError {
             }
             Self::ExpectedGotEof { expected } => {
                 write!(f, "expected '{}', got EOF", expected)
-            } // _ => write!(f, ""),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InternalError {
-    ExpectedGot {
-        function_name: String,
-        expected: char,
-        actual: char,
-    },
-    ExpectedGotEof {
-        function_name: String,
-        expected: char,
-    },
-    UnmatchedRegex {
-        function_name: String,
-        actual: String,
-    },
-    // not used
-    Unreachable {
-        function_name: String,
-    },
-}
-
-impl std::fmt::Display for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ExpectedGot {
-                function_name,
-                expected,
-                actual,
-            } => {
-                write!(
-                    f,
-                    "in {:?} expected {:?}, got {:?}",
-                    function_name, expected, actual
-                )
-            }
-            Self::ExpectedGotEof {
-                function_name,
-                expected,
-            } => {
-                write!(f, "in {:?} expected {:?}, got EOF", function_name, expected)
-            }
-            Self::UnmatchedRegex {
-                function_name,
-                actual,
-            } => {
-                write!(
-                    f,
-                    "in {:?} {:?} did not match regex specification",
-                    function_name, actual
-                )
-            }
-            Self::Unreachable { function_name } => {
-                write!(
-                    f,
-                    "in {:?} tried to access unreachable segment",
-                    function_name
-                )
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RatError {
-    pub kind: ErrorKind,
-    pub value: String,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorKind {
-    Io,
-    Source,
-    Lexical(LexicalError),
-    Internal(InternalError),
-    Parse(ParseError),
-}
-
-impl RatError {
-    pub fn io(_err: io::Error, span: Span) -> Self {
-        RatError {
-            kind: ErrorKind::Io,
-            value: String::new(),
-            span,
-        }
-    }
-
-    pub fn source(message: impl Into<String>, value: impl Into<String>, span: Span) -> Self {
-        RatError {
-            kind: ErrorKind::Source,
-            value: {
-                let m = message.into();
-                let v = value.into();
-                let mut out = String::from(m);
-                out.push('\n');
-                out.push_str(&v);
-                out
-            },
-            span,
-        }
-    }
-
-    pub fn lexical(err: LexicalError, value: impl Into<String>, span: Span) -> Self {
-        RatError {
-            kind: ErrorKind::Lexical(err),
-            value: value.into(),
-            span,
-        }
-    }
-
-    pub fn parse(err: ParseError, value: impl Into<String>, span: Span) -> Self {
-        RatError {
-            kind: ErrorKind::Parse(err),
-            value: value.into(),
-            span,
-        }
-    }
-
-    pub fn internal(err: InternalError, value: impl Into<String>, span: Span) -> Self {
-        RatError {
-            kind: ErrorKind::Internal(err),
-            value: value.into(),
-            span,
-        }
-    }
-
-    pub fn is_fatal(&self) -> bool {
-        matches!(
-            self.kind,
-            ErrorKind::Io | ErrorKind::Source | ErrorKind::Internal(_)
-        )
-    }
-}
-
-impl std::fmt::Display for RatError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            ErrorKind::Io => {
-                writeln!(f, "io error")?;
-            }
-            ErrorKind::Source => {
-                writeln!(f, "source error")?;
-            }
-            ErrorKind::Lexical(err) => {
-                writeln!(f, "lexical error: {}", err)?;
-            }
-            ErrorKind::Parse(err) => {
-                writeln!(f, "parse error: {}", err)?;
-            }
-            ErrorKind::Internal(err) => {
-                writeln!(f, "internal error: {}", err)?;
-            }
-        }
-
-        if !self.value.is_empty() {
-            writeln!(f, "{}", self.value)?;
-            // writeln!(f, "^")?;
-        }
-
-        let pos = self.span.start_pos;
-        write!(f, "line: {}, column {}", pos.line, pos.col)
-    }
-}
-
-impl std::error::Error for RatError {}
-
-impl From<io::Error> for RatError {
-    fn from(err: io::Error) -> Self {
-        let zero = Position {
-            line: 0,
-            col: 0,
-            offset: 0,
-        };
-
-        let span = Span {
-            start_pos: zero,
-            end_pos: zero,
-        };
-
-        RatError::io(err, span)
     }
 }

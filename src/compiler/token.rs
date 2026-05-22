@@ -1,4 +1,4 @@
-use crate::compiler::{Position, Span};
+use crate::compiler::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {

@@ -1,5 +1,5 @@
 use crate::compiler::{
-    Category, ErrorKind, InternalError, LexicalError, Position, RatError, RatSource, Span, Token,
+    Category, ErrorKind, LexicalError, Position, RatError, RatSource, Span, Token,
 };
 use std::collections::VecDeque;
 
@@ -97,12 +97,7 @@ impl Lexer {
 
         let actual = self.read()?;
         #[cfg(debug_assertions)]
-        self.verify_opening_char(
-            String::from("advance_string_literal()"),
-            '"',
-            actual,
-            start_pos,
-        )?;
+        self.verify_opening_char("advance_string_literal()", '"', actual, start_pos);
 
         let mut partial = String::from("\"");
 
@@ -130,12 +125,7 @@ impl Lexer {
         let actual = self.read()?;
 
         #[cfg(debug_assertions)]
-        self.verify_opening_char(
-            String::from("advance_character_literal()"),
-            '\'',
-            actual,
-            start_pos,
-        )?;
+        self.verify_opening_char("advance_character_literal()", '\'', actual, start_pos);
         let mut partial = String::from("\'");
 
         self.match_unterminated(LexicalError::UnterminatedCharLiteral, &partial, start_pos)?;
@@ -296,7 +286,7 @@ impl Lexer {
         let token = self.emit(Category::Literal, partial, start_pos);
 
         #[cfg(debug_assertions)]
-        self.verify_numeric_literal(String::from("advance_numeric_literal()"), &token, start_pos)?;
+        self.verify_numeric_literal("advance_numeric_literal()", &token, start_pos);
 
         Ok(Some(token))
     }
@@ -404,55 +394,33 @@ impl Lexer {
 
     fn verify_opening_char(
         &mut self,
-        function_name: String,
+        function_name: &str,
         expected: char,
         actual: Option<char>,
-        start: Position,
-    ) -> Result<(), RatError> {
+        _start_pos: Position,
+    ) {
         match actual {
-            Some(ch) if ch == expected => Ok(()),
-
-            Some(ch) => self.internal_error(
-                InternalError::ExpectedGot {
-                    function_name,
-                    expected,
-                    actual: ch,
-                },
-                start,
+            Some(ch) if ch == expected => {}
+            Some(ch) => panic!(
+                "in {:?} expected {:?}, got {:?}",
+                function_name, expected, ch
             ),
-
-            None => self.internal_error(
-                InternalError::ExpectedGotEof {
-                    function_name,
-                    expected,
-                },
-                start,
-            ),
+            None => panic!("in {:?} expected {:?}, got EOF", function_name, expected),
         }
     }
 
-    fn verify_numeric_literal(
-        &mut self,
-        function_name: String,
-        token: &Token,
-        start_pos: Position,
-    ) -> Result<(), RatError> {
+    fn verify_numeric_literal(&self, function_name: &str, token: &Token, _start_pos: Position) {
         use std::sync::OnceLock;
 
-        // use static to avoid recompilation per numeric literal
         static RE: OnceLock<regex::Regex> = OnceLock::new();
         let re = RE.get_or_init(|| regex::Regex::new(r"\d+((\.\d+)?[df]?|u?[icls]?)").unwrap());
-        if re.is_match(&token.value) {
-            return Ok(());
-        }
 
-        self.internal_error(
-            InternalError::UnmatchedRegex {
-                function_name,
-                actual: token.value.clone(),
-            },
-            start_pos,
-        )
+        assert!(
+            re.is_match(&token.value),
+            "in {:?} {:?} did not match regex specification",
+            function_name,
+            token.value,
+        );
     }
 
     fn advance_lexical_error(&mut self, mut err: RatError) -> Result<Token, RatError> {
@@ -541,19 +509,6 @@ impl Lexer {
         Err(RatError::lexical(
             err,
             value.into(),
-            Span::set(start_pos, self.source.position()),
-        ))
-    }
-
-    #[inline]
-    fn internal_error<T>(
-        &mut self,
-        err: InternalError,
-        start_pos: Position,
-    ) -> Result<T, RatError> {
-        Err(RatError::internal(
-            err,
-            "",
             Span::set(start_pos, self.source.position()),
         ))
     }
