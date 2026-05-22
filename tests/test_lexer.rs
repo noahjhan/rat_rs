@@ -8,7 +8,7 @@ fn test_advance_string_literal() {
     let expected_first = Token::new(
         Category::Literal,
         String::from("\"bonjour le monde!\""),
-        Span::new(
+        Span::set(
             Position {
                 line: 1,
                 col: 1,
@@ -43,7 +43,7 @@ fn test_advance_string_literal() {
     let expected_second = Token::new(
         Category::Punctuator,
         String::from("\n"),
-        Span::new(
+        Span::set(
             Position {
                 line: 1,
                 col: 20,

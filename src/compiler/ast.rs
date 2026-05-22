@@ -1,4 +1,4 @@
-use crate::compiler::Token;
+use crate::compiler::{Kind, Token};
 
 #[derive(Debug)]
 pub enum Ast {
@@ -8,11 +8,13 @@ pub enum Ast {
 
     VariableDecl {
         identifier: Token,
+        kind: Kind,
         expr: Expr,
     },
 
     FunctionDecl {
         identifier: Token,
+        kind: Kind,
         parameters: Vec<Parameter>,
         return_type: Token,
         body: Box<Ast>,
@@ -20,6 +22,7 @@ pub enum Ast {
 
     ConditionalStatement {
         keyword: Token,
+        kind: Kind,
         expr: Expr,
         next: Option<Box<Ast>>,
         body: Box<Ast>,
@@ -38,22 +41,28 @@ pub enum Expr {
         lhs: Box<Expr>,
         op: Token,
         rhs: Box<Expr>,
+        kind: Kind,
     },
     UnaryExpr {
         expr: Box<Expr>,
         op: Token,
+        kind: Kind,
     },
     NumericLiteral {
         value: Token,
+        kind: Kind,
     },
     StringLiteral {
         value: Token,
+        kind: Kind,
     },
     Identifier {
         value: Token,
+        kind: Kind,
     },
     FunctionCall {
         identifier: Token,
+        kind: Kind,
         parameters: Vec<Expr>,
     },
 }

@@ -82,6 +82,25 @@ impl std::fmt::Display for LexicalError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseError {
+    ExpectedGot { expected: String, actual: String },
+    ExpectedGotEof { expected: String },
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ExpectedGot { expected, actual } => {
+                write!(f, "expected '{}', got {}", expected, actual)
+            }
+            Self::ExpectedGotEof { expected } => {
+                write!(f, "expected '{}', got EOF", expected)
+            } // _ => write!(f, ""),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InternalError {
     ExpectedGot {
         function_name: String,
@@ -95,6 +114,10 @@ pub enum InternalError {
     UnmatchedRegex {
         function_name: String,
         actual: String,
+    },
+    // not used
+    Unreachable {
+        function_name: String,
     },
 }
 
@@ -128,6 +151,13 @@ impl std::fmt::Display for InternalError {
                     function_name, actual
                 )
             }
+            Self::Unreachable { function_name } => {
+                write!(
+                    f,
+                    "in {:?} tried to access unreachable segment",
+                    function_name
+                )
+            }
         }
     }
 }
@@ -145,6 +175,7 @@ pub enum ErrorKind {
     Source,
     Lexical(LexicalError),
     Internal(InternalError),
+    Parse(ParseError),
 }
 
 impl RatError {
@@ -179,6 +210,14 @@ impl RatError {
         }
     }
 
+    pub fn parse(err: ParseError, value: impl Into<String>, span: Span) -> Self {
+        RatError {
+            kind: ErrorKind::Parse(err),
+            value: value.into(),
+            span,
+        }
+    }
+
     pub fn internal(err: InternalError, value: impl Into<String>, span: Span) -> Self {
         RatError {
             kind: ErrorKind::Internal(err),
@@ -207,6 +246,9 @@ impl std::fmt::Display for RatError {
             ErrorKind::Lexical(err) => {
                 writeln!(f, "lexical error: {}", err)?;
             }
+            ErrorKind::Parse(err) => {
+                writeln!(f, "parse error: {}", err)?;
+            }
             ErrorKind::Internal(err) => {
                 writeln!(f, "internal error: {}", err)?;
             }
@@ -217,7 +259,7 @@ impl std::fmt::Display for RatError {
             // writeln!(f, "^")?;
         }
 
-        let pos = self.span.start;
+        let pos = self.span.start_pos;
         write!(f, "line: {}, column {}", pos.line, pos.col)
     }
 }
@@ -233,8 +275,8 @@ impl From<io::Error> for RatError {
         };
 
         let span = Span {
-            start: zero,
-            end: zero,
+            start_pos: zero,
+            end_pos: zero,
         };
 
         RatError::io(err, span)

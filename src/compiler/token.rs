@@ -1,16 +1,4 @@
-use crate::compiler::Position;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Span {
-    pub start: Position,
-    pub end: Position,
-}
-
-impl Span {
-    pub fn new(start: Position, end: Position) -> Self {
-        Span { start, end }
-    }
-}
+use crate::compiler::{Position, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
@@ -270,7 +258,7 @@ impl Token {
     pub fn debug_print(&self) {
         println!("kind:  {:?}", self.kind);
         println!("value: {:?}", self.value);
-        println!("line:  {:?}", self.span.start.line);
-        println!("col:   {:?}\n", self.span.start.col);
+        println!("line:  {:?}", self.span.start_pos.line);
+        println!("col:   {:?}\n", self.span.start_pos.col);
     }
 }

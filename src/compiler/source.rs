@@ -1,15 +1,8 @@
-use crate::compiler::{RatError, Span};
+use crate::compiler::{Position, RatError, Span};
 use std::fs::File;
 use std::io::{BufReader, Read};
 
 const BUF_SIZE: usize = 8 * 1024;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Position {
-    pub line: usize,
-    pub col: usize,
-    pub offset: usize,
-}
 
 pub struct RatSource {
     reader: BufReader<File>,
@@ -164,8 +157,8 @@ impl RatSource {
             format!("invalid utf8 sequence at offset {}", self.offset),
             String::new(),
             Span {
-                start: pos,
-                end: pos,
+                start_pos: pos,
+                end_pos: pos,
             },
         )
     }

@@ -10,7 +10,7 @@ pub fn compile(filepath: &str, verbose: bool) {
     };
 
     let mut lexer = Lexer::init(source);
-    match lexer.advance_tokens() {
+    match lexer.dispatch() {
         Err(err) => {
             eprintln!("error:\n{}\n", err);
             return;
