@@ -47,7 +47,7 @@ impl Render {
     }
     fn print_span(&self, err: &RatError) {
         let start_col = err.span.start_pos.col.saturating_sub(1);
-        let end_col = err.span.end_pos.col.saturating_sub(2);
+        let end_col = err.span.end_pos.col.saturating_sub(1);
         print!("{}", " ".repeat(start_col));
         let line_diff = err
             .span

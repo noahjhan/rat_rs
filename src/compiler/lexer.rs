@@ -156,8 +156,8 @@ impl Lexer {
                 Ok(Some(token))
             }
             _ => {
-                self.consume_into(&mut partial);
                 let end_pos = self.source.position();
+                self.consume_into(&mut partial);
                 self.lexical_error(
                     LexicalError::MultipleCharsInLiteral,
                     partial,
@@ -173,27 +173,22 @@ impl Lexer {
         partial: String,
         start_pos: Position,
     ) -> Result<String, RatError> {
+        let end_pos = self.source.position();
         match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
-            Some(ch) => {
-                let end_pos = self.source.position();
-                self.lexical_error(
-                    LexicalError::InvalidEscapeSequence(ch),
-                    format!("{}{}", partial, ch),
-                    start_pos,
-                    end_pos,
-                )
-            }
-            None => {
-                let end_pos = self.source.position();
-                self.lexical_error(
-                    LexicalError::UnterminatedEscapeSequence,
-                    partial,
-                    start_pos,
-                    end_pos,
-                )
-            }
+            Some(ch) => self.lexical_error(
+                LexicalError::InvalidEscapeSequence(ch),
+                format!("{}{}", partial, ch),
+                start_pos,
+                end_pos,
+            ),
+            None => self.lexical_error(
+                LexicalError::UnterminatedEscapeSequence,
+                partial,
+                start_pos,
+                end_pos,
+            ),
         }
     }
 
@@ -204,10 +199,10 @@ impl Lexer {
     ) -> Result<String, RatError> {
         let mut sequence = String::new();
 
+        let end_pos = self.source.position();
         match self.read() {
             Some('{') => sequence.push('{'),
             Some(ch) => {
-                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::InvalidUnicodeEscapeOpener(ch),
                     format!("{}{}", partial, ch),
@@ -216,7 +211,6 @@ impl Lexer {
                 );
             }
             None => {
-                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::UnterminatedUnicodeEscape,
                     partial,
@@ -227,6 +221,7 @@ impl Lexer {
         }
 
         loop {
+            let end_pos = self.source.position();
             match self.read() {
                 Some('}') => {
                     sequence.push('}');
@@ -238,7 +233,6 @@ impl Lexer {
                 }
 
                 Some(ch) => {
-                    let end_pos = self.source.position();
                     return self.lexical_error(
                         LexicalError::InvalidUnicodeEscapeDigit(ch),
                         format!("{}{}{}", partial, sequence, ch),
@@ -248,7 +242,6 @@ impl Lexer {
                 }
 
                 None => {
-                    let end_pos = self.source.position();
                     return self.lexical_error(
                         LexicalError::UnterminatedUnicodeEscape,
                         format!("{}{}", partial, sequence),
@@ -368,8 +361,8 @@ impl Lexer {
             }
 
             Some(ch) if !Category::is_delimiter(ch) => {
-                let _ = self.read();
                 let end_pos = self.source.position();
+                let _ = self.read();
                 return self.lexical_error(
                     LexicalError::UnexpectedCharAfterNumeric(ch),
                     format!("{}{}{}", partial, suffix, ch),
@@ -418,8 +411,8 @@ impl Lexer {
         }
 
         if partial.is_empty() {
-            let ch = self.read().unwrap();
             let end_pos = self.source.position();
+            let ch = self.read().unwrap();
             return self.lexical_error(
                 LexicalError::UnexpectedChar(ch),
                 String::from(ch),
