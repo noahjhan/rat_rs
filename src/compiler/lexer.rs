@@ -64,12 +64,12 @@ impl Lexer {
     }
 
     pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
-        match self.advance_whitespace()? {
+        match self.advance_whitespace() {
             Some(_) => {}
             None => return Ok(None),
         }
 
-        match self.peek()? {
+        match self.peek() {
             None => Ok(None),
             Some('"') => self.advance_string_literal(),
             Some('\'') => self.advance_character_literal(),
@@ -79,14 +79,14 @@ impl Lexer {
         }
     }
 
-    fn advance_whitespace(&mut self) -> Result<Option<()>, RatError> {
+    fn advance_whitespace(&mut self) -> Option<()> {
         loop {
-            match self.peek()? {
-                None => return Ok(None),
+            match self.peek() {
+                None => return None,
                 // treat newline ('\n') as significant character
-                Some(ch) if !ch.is_whitespace() || ch == '\n' => return Ok(Some(())),
+                Some(ch) if !ch.is_whitespace() || ch == '\n' => return Some(()),
                 _ => {
-                    self.source.read()?;
+                    self.read();
                 }
             }
         }
@@ -95,7 +95,7 @@ impl Lexer {
     fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
 
-        let actual = self.read()?;
+        let actual = self.read();
         #[cfg(debug_assertions)]
         self.verify_opening_char("advance_string_literal()", '"', actual, start_pos);
 
@@ -104,7 +104,7 @@ impl Lexer {
         loop {
             self.match_unterminated(LexicalError::UnterminatedString, &partial, start_pos)?;
 
-            let ch = self.read()?.unwrap();
+            let ch = self.read().unwrap();
             partial.push(ch);
             match ch {
                 '"' => {
@@ -122,7 +122,7 @@ impl Lexer {
 
     fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
-        let actual = self.read()?;
+        let actual = self.read();
 
         #[cfg(debug_assertions)]
         self.verify_opening_char("advance_character_literal()", '\'', actual, start_pos);
@@ -130,31 +130,31 @@ impl Lexer {
 
         self.match_unterminated(LexicalError::UnterminatedCharLiteral, &partial, start_pos)?;
 
-        match self.peek()? {
+        match self.peek() {
             Some('\'') => {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
                 self.lexical_error(LexicalError::EmptyCharLiteral, &partial, start_pos)?;
             }
             Some('\\') => {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
                 let sequence = self.read_escape_sequence(partial.clone(), start_pos)?;
                 partial.push_str(&sequence)
             }
             _ => {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
             }
         }
 
         self.match_unterminated(LexicalError::UnterminatedCharLiteral, &partial, start_pos)?;
 
-        match self.peek()? {
+        match self.peek() {
             Some('\'') => {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
                 let token = self.emit(Category::Literal, partial, start_pos);
                 Ok(Some(token))
             }
             _ => {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
                 self.lexical_error(LexicalError::MultipleCharsInLiteral, partial, start_pos)
             }
         }
@@ -165,7 +165,7 @@ impl Lexer {
         partial: String,
         start_pos: Position,
     ) -> Result<String, RatError> {
-        match self.read()? {
+        match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
             Some(ch) => self.lexical_error(
@@ -186,7 +186,7 @@ impl Lexer {
     ) -> Result<String, RatError> {
         let mut sequence = String::new();
 
-        match self.read()? {
+        match self.read() {
             Some('{') => sequence.push('{'),
             Some(ch) => {
                 return self.lexical_error(
@@ -205,7 +205,7 @@ impl Lexer {
         }
 
         loop {
-            match self.read()? {
+            match self.read() {
                 Some('}') => {
                     sequence.push('}');
                     break;
@@ -273,9 +273,9 @@ impl Lexer {
 
         let mut is_floating_type = false;
 
-        if matches!(self.peek()?, Some('.')) {
+        if matches!(self.peek(), Some('.')) {
             is_floating_type = true;
-            self.consume_into(&mut partial)?;
+            self.consume_into(&mut partial);
             let suffix = self.read_digits(partial.clone(), start_pos)?;
             partial.push_str(&suffix);
         }
@@ -293,7 +293,7 @@ impl Lexer {
 
     fn read_digits(&mut self, partial: String, start_pos: Position) -> Result<String, RatError> {
         let mut digits = String::new();
-        self.accumulate(&mut digits, |ch| ch.is_ascii_digit())?;
+        self.accumulate(&mut digits, |ch| ch.is_ascii_digit());
 
         if digits.is_empty() {
             return self.lexical_error(
@@ -315,21 +315,21 @@ impl Lexer {
         let is_integral_type = |ch: char| matches!(ch, 'i' | 'c' | 'l' | 's');
         let mut suffix = String::new();
 
-        match self.peek()? {
+        match self.peek() {
             Some('d' | 'f') => {
-                self.consume_into(&mut suffix)?;
+                self.consume_into(&mut suffix);
             }
 
             Some('u') if !is_floating_type => {
-                self.consume_into(&mut suffix)?;
+                self.consume_into(&mut suffix);
 
-                if matches!(self.peek()?, Some(ch) if is_integral_type(ch)) {
-                    self.consume_into(&mut suffix)?;
+                if matches!(self.peek(), Some(ch) if is_integral_type(ch)) {
+                    self.consume_into(&mut suffix);
                 }
             }
 
             Some(ch) if !is_floating_type && is_integral_type(ch) => {
-                self.consume_into(&mut suffix)?;
+                self.consume_into(&mut suffix);
             }
 
             Some(ch) if !Category::is_delimiter(ch) => {
@@ -350,7 +350,7 @@ impl Lexer {
         let start_pos = self.source.position();
         let mut partial = String::new();
 
-        self.accumulate(&mut partial, |ch| ch.is_alphanumeric() || ch == '_')?;
+        self.accumulate(&mut partial, |ch| ch.is_alphanumeric() || ch == '_');
 
         let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
 
@@ -362,7 +362,7 @@ impl Lexer {
         let mut partial = String::new();
 
         loop {
-            let Some(ch) = self.peek()? else { break };
+            let Some(ch) = self.peek() else { break };
 
             if ch.is_alphanumeric() || ch == '_' || (ch.is_whitespace() && ch != '\n') {
                 break;
@@ -372,14 +372,14 @@ impl Lexer {
             extended.push(ch);
 
             if Category::is_any(&extended).is_some() {
-                self.consume_into(&mut partial)?;
+                self.consume_into(&mut partial);
             } else {
                 break;
             }
         }
 
         if partial.is_empty() {
-            let ch = self.read()?.unwrap();
+            let ch = self.read().unwrap();
             return self.lexical_error(
                 LexicalError::UnexpectedChar(ch),
                 String::from(ch),
@@ -427,8 +427,8 @@ impl Lexer {
         let start_pos = err.span.start_pos;
         let mut value = err.value.clone();
 
-        while !matches!(self.peek()?, Some('\n') | None) {
-            value.push(self.read()?.unwrap());
+        while !matches!(self.peek(), Some('\n') | None) {
+            value.push(self.read().unwrap());
         }
 
         err.value = value.clone();
@@ -441,22 +441,18 @@ impl Lexer {
     }
 
     #[inline]
-    fn accumulate(
-        &mut self,
-        partial: &mut String,
-        pred: impl Fn(char) -> bool,
-    ) -> Result<usize, RatError> {
+    fn accumulate(&mut self, partial: &mut String, pred: impl Fn(char) -> bool) -> usize {
         let mut chars_read = 0;
 
-        while let Some(ch) = self.source.peek()? {
+        while let Some(ch) = self.source.peek() {
             if !pred(ch) {
                 break;
             }
-            partial.push(self.source.read()?.unwrap());
+            partial.push(self.source.read().unwrap());
             chars_read += 1;
         }
 
-        Ok(chars_read)
+        chars_read
     }
 
     #[inline]
@@ -466,27 +462,30 @@ impl Lexer {
         partial: &str,
         start_pos: Position,
     ) -> Result<(), RatError> {
-        match self.peek()? {
+        match self.peek() {
             Some('\n') | None => self.lexical_error(kind, partial, start_pos),
             _ => Ok(()),
         }
     }
 
     #[inline]
-    fn consume_into(&mut self, partial: &mut String) -> Result<char, RatError> {
+    fn consume_into(&mut self, partial: &mut String) -> char {
         // caller must guarantee peek succeeds
-        let ch = self.read()?.unwrap();
+        let ch = self
+            .read()
+            .expect("consume_into() requires read to return Some(_), got None");
+
         partial.push(ch);
-        Ok(ch)
+        ch
     }
 
     #[inline]
-    fn read(&mut self) -> Result<Option<char>, RatError> {
+    fn read(&mut self) -> Option<char> {
         self.source.read()
     }
 
     #[inline]
-    fn peek(&mut self) -> Result<Option<char>, RatError> {
+    fn peek(&mut self) -> Option<char> {
         self.source.peek()
     }
 

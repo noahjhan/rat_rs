@@ -1,4 +1,4 @@
-use crate::compiler::{RatError, Span};
+use crate::compiler::{Position, RatError, Span};
 
 pub struct RatSource {
     source: String,
@@ -33,11 +33,41 @@ impl RatSource {
     }
 
     pub fn read(&mut self) -> Option<char> {
-        None
+        let ch = match self.peeked.take() {
+            Some(ch) => ch,
+            None => self.remaining().chars().next()?,
+        };
+
+        self.offset += ch.len_utf8();
+
+        if ch == '\n' {
+            self.line += 1;
+            self.col = 1;
+        } else {
+            self.col += 1;
+        }
+
+        Some(ch)
     }
 
     pub fn peek(&mut self) -> Option<char> {
-        None
+        if self.peeked.is_none() {
+            self.peeked = self.remaining().chars().next();
+        }
+
+        self.peeked
+    }
+
+    pub fn position(&mut self) -> Position {
+        Position {
+            line: self.line,
+            col: self.col,
+            offset: self.offset,
+        }
+    }
+
+    fn remaining(&self) -> &str {
+        &self.source[self.offset..]
     }
 }
 
