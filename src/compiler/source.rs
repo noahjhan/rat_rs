@@ -1,5 +1,6 @@
 use crate::compiler::{Position, RatError, Span};
 
+#[derive(Clone)]
 pub struct RatSource {
     source: String,
 
@@ -30,6 +31,16 @@ impl RatSource {
             offset: 0,
             peeked: None,
         })
+    }
+
+    pub fn empty() -> Self {
+        RatSource {
+            source: String::new(),
+            line: 1,
+            col: 1,
+            offset: 0,
+            peeked: None,
+        }
     }
 
     pub fn read(&mut self) -> Option<char> {
@@ -64,6 +75,27 @@ impl RatSource {
             col: self.col,
             offset: self.offset,
         }
+    }
+
+    pub fn from_span(&self, span: Span) -> Option<String> {
+        let source = self.source.clone();
+
+        let prefix = source.get(..span.start_pos.offset)?;
+        let suffix = source.get(span.end_pos.offset..)?;
+
+        let start_pos = prefix.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let end_pos = suffix
+            .find('\n')
+            .map(|i| span.end_pos.offset + i + 1)
+            .unwrap_or(source.len());
+
+        let line = source.get(start_pos..end_pos)?;
+
+        if line.len() == 0 {
+            return None;
+        }
+
+        Some(String::from(line))
     }
 
     fn remaining(&self) -> &str {

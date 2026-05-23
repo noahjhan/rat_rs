@@ -61,26 +61,18 @@ impl std::fmt::Display for RatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             ErrorKind::Io => {
-                writeln!(f, "io error")?;
+                write!(f, "io error")
             }
             ErrorKind::Source => {
-                writeln!(f, "source error")?;
+                write!(f, "source error")
             }
             ErrorKind::Lexical(err) => {
-                writeln!(f, "lexical error: {}", err)?;
+                write!(f, "lexical error: {}", err)
             }
             ErrorKind::Parse(err) => {
-                writeln!(f, "parse error: {}", err)?;
+                write!(f, "parse error: {}", err)
             }
         }
-
-        if !self.value.is_empty() {
-            writeln!(f, "{}", self.value)?;
-        }
-
-        let pos = self.span.start_pos;
-
-        write!(f, "line: {}, column {}", pos.line, pos.col)
     }
 }
 

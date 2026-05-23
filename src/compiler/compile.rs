@@ -1,32 +1,36 @@
-use crate::compiler::{Lexer, RatSource};
+use crate::compiler::{Lexer, RatSource, Render};
 
 pub fn compile(filepath: String, verbose: bool) {
     let source = match RatSource::init(filepath) {
         Ok(source) => source,
         Err(err) => {
-            eprintln!("error:\n{}\n", err);
+            let mut render = Render::init(RatSource::empty());
+            render.print(err);
             return;
         }
     };
 
-    let mut lexer = Lexer::init(source);
-    match lexer.dispatch() {
-        Err(err) => {
-            eprintln!("error:\n{}\n", err);
+    let (tokens, errors) = {
+        let mut lexer = Lexer::init(source.clone());
+
+        if let Err(err) = lexer.dispatch() {
+            let mut render = Render::init(source.clone());
+            render.print(err);
             return;
         }
-        _ => {}
-    }
 
-    let tokens = lexer.get_tokens();
+        (lexer.get_tokens().clone(), lexer.get_errors().clone())
+    };
 
-    for err in lexer.get_errors() {
-        eprintln!("warning:\n{}\n", err);
-    }
+    let mut render = Render::init(source.clone());
 
     for token in tokens {
         if verbose {
-            token.debug_print()
+            token.debug_print();
         }
+    }
+
+    for err in errors {
+        render.print(err);
     }
 }

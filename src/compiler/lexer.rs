@@ -3,7 +3,6 @@ use crate::compiler::{
 };
 use std::collections::VecDeque;
 
-/// TODO: finish read_unicode_escape()
 /// TODO: multi-line string literals
 /// TODO: single-line & multi-line comments
 /// TODO: Hex/Octal/Binary integer representations
@@ -108,7 +107,8 @@ impl Lexer {
             partial.push(ch);
             match ch {
                 '"' => {
-                    let token = self.emit(Category::Literal, partial, start_pos);
+                    let end_pos = self.source.position();
+                    let token = self.emit(Category::Literal, partial, start_pos, end_pos);
                     return Ok(Some(token));
                 }
                 '\\' => {
@@ -133,7 +133,8 @@ impl Lexer {
         match self.peek() {
             Some('\'') => {
                 self.consume_into(&mut partial);
-                self.lexical_error(LexicalError::EmptyCharLiteral, &partial, start_pos)?;
+                let end_pos = self.source.position();
+                self.lexical_error(LexicalError::EmptyCharLiteral, &partial, start_pos, end_pos)?;
             }
             Some('\\') => {
                 self.consume_into(&mut partial);
@@ -150,12 +151,19 @@ impl Lexer {
         match self.peek() {
             Some('\'') => {
                 self.consume_into(&mut partial);
-                let token = self.emit(Category::Literal, partial, start_pos);
+                let end_pos = self.source.position();
+                let token = self.emit(Category::Literal, partial, start_pos, end_pos);
                 Ok(Some(token))
             }
             _ => {
                 self.consume_into(&mut partial);
-                self.lexical_error(LexicalError::MultipleCharsInLiteral, partial, start_pos)
+                let end_pos = self.source.position();
+                self.lexical_error(
+                    LexicalError::MultipleCharsInLiteral,
+                    partial,
+                    start_pos,
+                    end_pos,
+                )
             }
         }
     }
@@ -168,13 +176,23 @@ impl Lexer {
         match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
-            Some(ch) => self.lexical_error(
-                LexicalError::InvalidEscapeSequence(ch),
-                format!("{}{}", partial, ch),
-                start_pos,
-            ),
+            Some(ch) => {
+                let end_pos = self.source.position();
+                self.lexical_error(
+                    LexicalError::InvalidEscapeSequence(ch),
+                    format!("{}{}", partial, ch),
+                    start_pos,
+                    end_pos,
+                )
+            }
             None => {
-                self.lexical_error(LexicalError::UnterminatedEscapeSequence, partial, start_pos)
+                let end_pos = self.source.position();
+                self.lexical_error(
+                    LexicalError::UnterminatedEscapeSequence,
+                    partial,
+                    start_pos,
+                    end_pos,
+                )
             }
         }
     }
@@ -189,17 +207,21 @@ impl Lexer {
         match self.read() {
             Some('{') => sequence.push('{'),
             Some(ch) => {
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::InvalidUnicodeEscapeOpener(ch),
                     format!("{}{}", partial, ch),
                     start_pos,
+                    end_pos,
                 );
             }
             None => {
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::UnterminatedUnicodeEscape,
                     partial,
                     start_pos,
+                    end_pos,
                 );
             }
         }
@@ -216,18 +238,22 @@ impl Lexer {
                 }
 
                 Some(ch) => {
+                    let end_pos = self.source.position();
                     return self.lexical_error(
                         LexicalError::InvalidUnicodeEscapeDigit(ch),
                         format!("{}{}{}", partial, sequence, ch),
                         start_pos,
+                        end_pos,
                     );
                 }
 
                 None => {
+                    let end_pos = self.source.position();
                     return self.lexical_error(
                         LexicalError::UnterminatedUnicodeEscape,
                         format!("{}{}", partial, sequence),
                         start_pos,
+                        end_pos,
                     );
                 }
             }
@@ -236,28 +262,34 @@ impl Lexer {
         let hex = &sequence[1..sequence.len() - 1];
 
         if hex.is_empty() || hex.len() > 6 {
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::InvalidUnicodeDigitCount(hex.len()),
                 format!("{}{}", partial, sequence),
                 start_pos,
+                end_pos,
             );
         }
 
         let codepoint = u32::from_str_radix(hex, 16).unwrap();
 
         if codepoint > 0x10_FFFF {
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::InvalidUnicodeCodepoint(codepoint),
                 format!("{}{}", partial, sequence),
                 start_pos,
+                end_pos,
             );
         }
 
         if (0xD800..=0xDFFF).contains(&codepoint) {
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::SurrogateCodepoint(codepoint),
                 format!("{}{}", partial, sequence),
                 start_pos,
+                end_pos,
             );
         }
 
@@ -283,7 +315,8 @@ impl Lexer {
         let suffix = self.read_numeric_suffix(is_floating_type, partial.clone(), start_pos)?;
         partial.push_str(&suffix);
 
-        let token = self.emit(Category::Literal, partial, start_pos);
+        let end_pos = self.source.position();
+        let token = self.emit(Category::Literal, partial, start_pos, end_pos);
 
         #[cfg(debug_assertions)]
         self.verify_numeric_literal("advance_numeric_literal()", &token, start_pos);
@@ -296,10 +329,12 @@ impl Lexer {
         self.accumulate(&mut digits, |ch| ch.is_ascii_digit());
 
         if digits.is_empty() {
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::NoDigitsInNumericLiteral,
                 format!("{}{}", partial, digits),
                 start_pos,
+                end_pos,
             );
         }
 
@@ -333,10 +368,13 @@ impl Lexer {
             }
 
             Some(ch) if !Category::is_delimiter(ch) => {
+                let _ = self.read();
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::UnexpectedCharAfterNumeric(ch),
                     format!("{}{}{}", partial, suffix, ch),
                     start_pos,
+                    end_pos,
                 );
             }
 
@@ -354,7 +392,8 @@ impl Lexer {
 
         let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
 
-        Ok(Some(self.emit(category, partial, start_pos)))
+        let end_pos = self.source.position();
+        Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
 
     fn advance_operator_or_punctuator(&mut self) -> Result<Option<Token>, RatError> {
@@ -380,16 +419,19 @@ impl Lexer {
 
         if partial.is_empty() {
             let ch = self.read().unwrap();
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::UnexpectedChar(ch),
                 String::from(ch),
                 start_pos,
+                end_pos,
             );
         }
 
         let category = Category::is_any(&partial).unwrap_or(Category::Invalid);
 
-        Ok(Some(self.emit(category, partial, start_pos)))
+        let end_pos = self.source.position();
+        Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
 
     fn verify_opening_char(
@@ -423,19 +465,13 @@ impl Lexer {
         );
     }
 
-    fn advance_lexical_error(&mut self, mut err: RatError) -> Result<Token, RatError> {
-        let start_pos = err.span.start_pos;
-        let mut value = err.value.clone();
-
+    fn advance_lexical_error(&mut self, err: RatError) -> Result<Token, RatError> {
         while !matches!(self.peek(), Some('\n') | None) {
-            value.push(self.read().unwrap());
+            self.read();
         }
 
-        err.value = value.clone();
-        self.errors.push(err);
-
-        let span = Span::set(start_pos, self.source.position());
-        let token = Token::new(Category::Invalid, value, span);
+        self.errors.push(err.clone());
+        let token = Token::new(Category::Invalid, err.value, err.span);
 
         Ok(token)
     }
@@ -463,18 +499,19 @@ impl Lexer {
         start_pos: Position,
     ) -> Result<(), RatError> {
         match self.peek() {
-            Some('\n') | None => self.lexical_error(kind, partial, start_pos),
+            Some('\n') | None => {
+                let end_pos = self.source.position();
+                self.lexical_error(kind, partial, start_pos, end_pos)
+            }
             _ => Ok(()),
         }
     }
 
     #[inline]
     fn consume_into(&mut self, partial: &mut String) -> char {
-        // caller must guarantee peek succeeds
         let ch = self
             .read()
             .expect("consume_into() requires read to return Some(_), got None");
-
         partial.push(ch);
         ch
     }
@@ -490,12 +527,14 @@ impl Lexer {
     }
 
     #[inline]
-    fn emit(&mut self, category: Category, value: String, start_pos: Position) -> Token {
-        Token::new(
-            category,
-            value,
-            Span::set(start_pos, self.source.position()),
-        )
+    fn emit(
+        &mut self,
+        category: Category,
+        value: String,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Token {
+        Token::new(category, value, Span::set(start_pos, end_pos))
     }
 
     #[inline]
@@ -504,11 +543,12 @@ impl Lexer {
         err: LexicalError,
         value: impl Into<String>,
         start_pos: Position,
+        end_pos: Position,
     ) -> Result<T, RatError> {
         Err(RatError::lexical(
             err,
             value.into(),
-            Span::set(start_pos, self.source.position()),
+            Span::set(start_pos, end_pos),
         ))
     }
 }

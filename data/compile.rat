@@ -6,10 +6,11 @@ fn foo(x: int): int {
 
   let fnx: int = 10
 
-  let z: float = 3.0f
+  let z: float = 3.0uf
   io::println(z)
 
   let c: string = "hello\u{}"
+  let f: string = "unterminated
 
   ret x
 }
