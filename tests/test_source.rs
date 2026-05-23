@@ -7,14 +7,16 @@ fn test_init_file_exists() {
         col: 1,
         offset: 0,
     };
-    let source = RatSource::init("data/file_exists.txt").unwrap();
+    let filepath = String::from("data/file_exists.txt");
+    let source = RatSource::init(filepath).unwrap();
     assert_eq!(expected, source.position());
 }
 
 #[test]
 fn test_init_nonexistent_file() {
+    let filepath = String::from("data/nonexistent_file.txt");
     assert!(
-        RatSource::init("data/nonexistent_file.txt").is_err(),
+        RatSource::init(filepath).is_err(),
         "expected init to fail for nonexistent file"
     );
 }
@@ -28,7 +30,8 @@ fn test_read() {
     };
     let expected_output = "hello, world.\nbonjour le monde!\n";
 
-    let mut source = RatSource::init("data/file_exists.txt").unwrap();
+    let filepath = string::from("data/file_exists.txt");
+    let source = ratsource::init(filepath).unwrap();
     let mut actual_output = String::new();
 
     while let Some(ch) = source.read().unwrap() {
@@ -53,7 +56,8 @@ fn test_peek() {
         col: 1,
         offset: 14,
     };
-    let mut source = RatSource::init("data/file_exists.txt").unwrap();
+    let filepath = String::from("data/file_exists.txt");
+    let source = RatSource::init(filepath).unwrap();
 
     for _ in 0..14 {
         if source.read().unwrap().is_none() {
@@ -73,7 +77,8 @@ fn test_peek() {
 
 #[test]
 fn test_bad_utf8() {
-    let mut source = RatSource::init("data/bad_utf8.txt").unwrap();
+    let filepath = String::from("data/bad_utf8.txt");
+    let mut source = RatSource::init(filepath).unwrap();
     match source.read() {
         Ok(_) => panic!("read returned OK upon reading bad utf8 character"),
         Err(_) => {}

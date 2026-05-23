@@ -14,6 +14,10 @@ impl Parser {
     pub fn dispatch(&mut self) -> Result<Ast, RatError> {
         let _ = self.source;
         let _ = self.tokens;
+        let _ = self.peek();
+        let _ = self.advance();
+        let _ = self.check("");
+        let _ = self.expect("");
 
         Ok(Ast::Program {
             statements: Vec::new(),
@@ -36,22 +40,31 @@ impl Parser {
         match self.advance() {
             Some(token) if token.value == value => Ok(token),
 
-            Some(token) => Err(RatError::parse(
+            Some(token) => self.parse_error(
                 ParseError::ExpectedGot {
                     expected: String::from(value),
                     actual: token.value.clone(),
                 },
-                token.value.clone(),
+                token.value,
                 token.span,
-            )),
+            ),
 
-            None => Err(RatError::parse(
+            None => self.parse_error(
                 ParseError::ExpectedGotEof {
                     expected: String::from(value),
                 },
                 value,
                 Span::new(),
-            )),
+            ),
         }
+    }
+
+    fn parse_error<T>(
+        &mut self,
+        err: ParseError,
+        value: impl Into<String>,
+        span: Span,
+    ) -> Result<T, RatError> {
+        Err(RatError::parse(err, value.into(), span))
     }
 }

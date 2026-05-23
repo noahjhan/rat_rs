@@ -1,6 +1,6 @@
 use crate::compiler::{Lexer, RatSource};
 
-pub fn compile(filepath: &str, verbose: bool) {
+pub fn compile(filepath: String, verbose: bool) {
     let source = match RatSource::init(filepath) {
         Ok(source) => source,
         Err(err) => {
