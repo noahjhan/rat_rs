@@ -104,6 +104,7 @@ pub enum LexicalError {
     EmptyCharLiteral,
     MultipleCharsInLiteral,
     NoDigitsInNumericLiteral,
+    UnterminatedMultiLineComment,
     InvalidEscapeSequence(char),
     InvalidUnicodeEscapeOpener(char),
     InvalidUnicodeEscapeDigit(char),
@@ -137,6 +138,9 @@ impl std::fmt::Display for LexicalError {
             }
             Self::NoDigitsInNumericLiteral => {
                 write!(f, "expected ascii digits in numeric literal")
+            }
+            Self::UnterminatedMultiLineComment => {
+                write!(f, "expected closing '*/' in mutli-line comment")
             }
             Self::InvalidEscapeSequence(ch) => {
                 write!(f, "invalid escape sequence '\\{ch}'")

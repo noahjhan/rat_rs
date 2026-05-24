@@ -83,11 +83,8 @@ impl Category {
     }
 
     fn is_punctuator_str(s: &str) -> Option<Self> {
-        matches!(
-            s,
-            ":" | "," | "[" | "]" | "{" | "}" | "(" | ")" | "//" | "/*" | "*/" | "\n"
-        )
-        .then_some(Category::Punctuator)
+        matches!(s, ":" | "," | "[" | "]" | "{" | "}" | "(" | ")" | "\n")
+            .then_some(Category::Punctuator)
     }
 
     fn is_type_str(s: &str) -> Option<Self> {
@@ -190,9 +187,6 @@ pub enum ConstituentPunctuator {
     BraceClose,
     ParenOpen,
     ParenClose,
-    CommentLine,
-    CommentBlockOpen,
-    CommentBlockClose,
     Newline,
 }
 
