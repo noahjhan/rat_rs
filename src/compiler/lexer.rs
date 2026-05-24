@@ -16,7 +16,6 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    /// constructor
     pub fn init(source: &'a mut RatSource) -> Self {
         Lexer {
             source,
@@ -25,17 +24,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// returns tokens field (may be empty)
     pub fn get_tokens(&self) -> &VecDeque<Token> {
         &self.tokens
     }
 
-    /// returns errors field (may be empty)
     pub fn get_errors(&self) -> &Vec<RatError> {
         &self.errors
     }
 
-    /// populate tokens and errors with lexical data from source
     pub fn dispatch(&mut self) -> Result<(), RatError> {
         loop {
             match self.advance_token() {
@@ -50,16 +46,19 @@ impl<'a> Lexer<'a> {
                 Ok(Some(token)) => {
                     self.tokens.push_back(token.clone());
                 }
+
                 Err(mut err) if matches!(err.kind, ErrorKind::Lexical(_)) => {
                     let token = self.advance_lexical_error(&mut err)?;
                     self.tokens.push_back(token);
                 }
+
                 // treat Error::Kind{Io, Source} as fatal
                 Err(err) => {
                     self.tokens.clear();
                     self.errors.clear();
                     return Err(err);
                 }
+
                 Ok(None) => return Ok(()),
             }
         }
@@ -73,10 +72,15 @@ impl<'a> Lexer<'a> {
 
         match self.peek() {
             None => Ok(None),
+
             Some('"') => self.advance_string_literal(),
+
             Some('\'') => self.advance_character_literal(),
+
             Some(ch) if ch.is_ascii_digit() => self.advance_numeric_literal(),
+
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.advance_keyword_or_identifier(),
+
             _ => self.advance_operator_or_punctuator(),
         }
     }
@@ -86,8 +90,10 @@ impl<'a> Lexer<'a> {
         loop {
             match self.peek() {
                 None => return,
+
                 // treat newline ('\n') as significant character
                 Some(ch) if !ch.is_whitespace() || ch == '\n' => return,
+
                 _ => {
                     self.read();
                 }
@@ -99,13 +105,18 @@ impl<'a> Lexer<'a> {
     fn advance_single_line_comment(&mut self) {
         match self.source.peek_n(2) {
             Some(str) if str == "//" => {}
+
             Some(_) => return,
+
             None => return,
         };
+
         loop {
             match self.peek() {
                 None => return,
+
                 Some('\n') => return,
+
                 Some(_) => {
                     self.read();
                 }
@@ -117,6 +128,7 @@ impl<'a> Lexer<'a> {
     fn advance_multi_line_comment(&mut self) -> Result<(), RatError> {
         match self.source.peek_n(2) {
             Some(str) if str == "/*" => {}
+
             _ => return Ok(()),
         }
 
@@ -187,10 +199,12 @@ impl<'a> Lexer<'a> {
                     let token = self.emit(Category::Literal, partial, start_pos, end_pos);
                     return Ok(Some(token));
                 }
+
                 '\\' => {
                     let sequence = self.read_escape_sequence(partial.clone(), start_pos)?;
                     partial.push_str(&sequence)
                 }
+
                 _ => {}
             }
         }
@@ -212,11 +226,13 @@ impl<'a> Lexer<'a> {
                 let end_pos = self.source.position();
                 self.lexical_error(LexicalError::EmptyCharLiteral, &partial, start_pos, end_pos)?;
             }
+
             Some('\\') => {
                 self.consume_into(&mut partial);
                 let sequence = self.read_escape_sequence(partial.clone(), start_pos)?;
                 partial.push_str(&sequence)
             }
+
             _ => {
                 self.consume_into(&mut partial);
             }
@@ -231,6 +247,7 @@ impl<'a> Lexer<'a> {
                 let token = self.emit(Category::Literal, partial, start_pos, end_pos);
                 Ok(Some(token))
             }
+
             _ => {
                 let end_pos = self.source.position();
                 self.consume_into(&mut partial);
@@ -252,7 +269,9 @@ impl<'a> Lexer<'a> {
     ) -> Result<String, RatError> {
         match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
+
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
+
             Some(ch) => {
                 let end_pos = self.source.position();
                 self.lexical_error(
@@ -262,6 +281,7 @@ impl<'a> Lexer<'a> {
                     end_pos,
                 )
             }
+
             None => {
                 let end_pos = self.source.position();
                 self.lexical_error(
@@ -284,6 +304,7 @@ impl<'a> Lexer<'a> {
         let mut sequence = String::new();
         match self.read() {
             Some('{') => sequence.push('{'),
+
             Some(ch) => {
                 let end_pos = self.source.position();
                 return self.lexical_error(
@@ -293,6 +314,7 @@ impl<'a> Lexer<'a> {
                     end_pos,
                 );
             }
+
             None => {
                 let end_pos = self.source.position();
                 return self.lexical_error(
@@ -312,9 +334,11 @@ impl<'a> Lexer<'a> {
                     sequence.push('}');
                     break;
                 }
+
                 Some(ch) if ch.is_ascii_hexdigit() => {
                     sequence.push(ch);
                 }
+
                 Some(ch) => {
                     return self.lexical_error(
                         LexicalError::InvalidUnicodeEscapeDigit(ch),
@@ -323,6 +347,7 @@ impl<'a> Lexer<'a> {
                         end_pos,
                     );
                 }
+
                 None => {
                     return self.lexical_error(
                         LexicalError::UnterminatedUnicodeEscape,
@@ -373,8 +398,10 @@ impl<'a> Lexer<'a> {
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut partial = String::new();
+
         let prefix = self.read_digits(partial.clone(), start_pos)?;
         partial.push_str(&prefix);
+
         let mut is_floating_type = false;
 
         if matches!(self.peek(), Some('.')) {
@@ -426,15 +453,18 @@ impl<'a> Lexer<'a> {
             Some('d' | 'f') => {
                 self.consume_into(&mut suffix);
             }
+
             Some('u') if !is_floating_type => {
                 self.consume_into(&mut suffix);
                 if matches!(self.peek(), Some(ch) if is_integral_type(ch)) {
                     self.consume_into(&mut suffix);
                 }
             }
+
             Some(ch) if !is_floating_type && is_integral_type(ch) => {
                 self.consume_into(&mut suffix);
             }
+
             Some(ch) if !Category::is_delimiter(ch) => {
                 let _ = self.read();
                 let end_pos = self.source.position();
@@ -445,6 +475,7 @@ impl<'a> Lexer<'a> {
                     end_pos,
                 );
             }
+
             _ => {}
         };
 
@@ -474,8 +505,10 @@ impl<'a> Lexer<'a> {
             if ch.is_alphanumeric() || ch == '_' || (ch.is_whitespace() && ch != '\n') {
                 break;
             }
+
             let mut extended = partial.clone();
             extended.push(ch);
+
             if Category::is_any(&extended).is_some() {
                 self.consume_into(&mut partial);
             } else {
@@ -509,10 +542,12 @@ impl<'a> Lexer<'a> {
     ) {
         match actual {
             Some(ch) if ch == expected => {}
+
             Some(ch) => panic!(
                 "in {:?} expected {:?}, got {:?}",
                 function_name, expected, ch
             ),
+
             None => panic!("in {:?} expected {:?}, got EOF", function_name, expected),
         }
     }
@@ -532,6 +567,7 @@ impl<'a> Lexer<'a> {
 
     /// upon error, read chars until the invalid token has closed
     fn advance_lexical_error(&mut self, err: &mut RatError) -> Result<Token, RatError> {
+        let first_char = err.clone().value.chars().next().unwrap_or('\0');
         let literal_delimiter = err
             .value
             .chars()
@@ -539,6 +575,7 @@ impl<'a> Lexer<'a> {
             .filter(|ch| matches!(ch, '\'' | '"'));
 
         let partial = &mut err.value;
+        let mut search_for_quote = false;
 
         let context: Box<dyn Fn(char) -> bool> = match err.kind {
             ErrorKind::Lexical(LexicalError::UnterminatedMultiLineComment)
@@ -555,6 +592,7 @@ impl<'a> Lexer<'a> {
             | ErrorKind::Lexical(LexicalError::InvalidUnicodeDigitCount(_))
             | ErrorKind::Lexical(LexicalError::InvalidUnicodeCodepoint(_))
             | ErrorKind::Lexical(LexicalError::SurrogateCodepoint(_)) => {
+                search_for_quote = true;
                 let delimiter = literal_delimiter;
                 Box::new(move |ch| match delimiter {
                     Some(delim) => matches!(ch, '\n') || ch == delim,
@@ -571,25 +609,44 @@ impl<'a> Lexer<'a> {
             | ErrorKind::Lexical(LexicalError::NoDigitsInNumericLiteral) => {
                 Box::new(|ch: char| Category::is_delimiter(ch))
             }
+
             _ => {
                 panic!("unexpected ErrorKind in advance_lexical_error()");
             }
         };
 
         while let Some(ch) = self.peek() {
-            if context(ch) {
-                if matches!(ch, '\'' | '"') {
-                    let two = self.source.peek_n(2).unwrap_or_default();
-                    if two.starts_with('\\') {
-                        self.read().map(|c| partial.push(c));
-                        self.read().map(|c| partial.push(c));
-                        continue;
-                    }
+            match self.source.peek_n(2) {
+                Some(str) if str == "\\'" && first_char == '\'' => {
                     self.read().map(|c| partial.push(c));
+                    self.read().map(|c| partial.push(c));
+                    continue;
                 }
+
+                Some(str) if str == "\\\"" && first_char == '"' => {
+                    self.read().map(|c| partial.push(c));
+                    self.read().map(|c| partial.push(c));
+                    continue;
+                }
+
+                Some(_) => {}
+
+                None => {}
+            };
+
+            if context(ch) {
+                match ch {
+                    '\'' | '"' if search_for_quote => {
+                        self.read().map(|c| partial.push(c));
+                    }
+
+                    _ => {}
+                };
                 break;
             }
+
             self.read().map(|c| partial.push(c));
+            continue;
         }
 
         self.errors.push(err.clone());
@@ -607,6 +664,7 @@ impl<'a> Lexer<'a> {
             if !pred(ch) {
                 break;
             }
+
             partial.push(self.source.read().unwrap());
             chars_read += 1;
         }
@@ -626,6 +684,7 @@ impl<'a> Lexer<'a> {
                 let end_pos = self.source.position();
                 self.lexical_error(kind, partial, start_pos, end_pos)
             }
+
             _ => Ok(()),
         }
     }
