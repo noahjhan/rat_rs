@@ -3,8 +3,8 @@ use rat::compiler::{Category, Lexer, Position, RatSource, Span, Token};
 #[test]
 fn test_advance_string_literal() {
     let filepath = String::from("data/string_literal.txt");
-    let source = RatSource::init(filepath).unwrap();
-    let mut lexer = Lexer::init(source);
+    let mut source = RatSource::init(filepath).unwrap();
+    let mut lexer = Lexer::init(&mut source);
 
     let expected_first = Token::new(
         Category::Literal,

@@ -46,6 +46,6 @@ fn main() {
     println!("{}", ascii_ratty);
     println!("bonjour le monde!");
 
-    let filepath = String::from("data/compile.rat");
+    let filepath = String::from("compile.rat");
     compile(filepath, true);
 }

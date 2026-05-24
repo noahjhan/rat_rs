@@ -1,56 +1,48 @@
 use crate::compiler::{
     Category, ErrorKind, LexicalError, Position, RatError, RatSource, Span, Token,
 };
+
 use std::collections::VecDeque;
 
-/// TODO: multi-line string literals
-/// TODO: single-line & multi-line comments
-/// TODO: Hex/Octal/Binary integer representations
-///
-/// TODO: Improved error recovery, currently too coarse
-/// Examples:
-/// Invalid character          -> consume one char                    
-/// Invalid escape sequence    -> consume minimal chars, perhaps until closing quote or newline
-/// Unterminated string        -> skip until closing quote OR newline
-/// Unterminated block comment -> skip until EOF or `*/`              
-/// Malformed number           -> stop at first invalid char          
-/// unknown state              -> broader sync                       
+/// this file holds the structure associated with lexing source files
 
-pub struct Lexer {
-    source: RatSource,
+/// TODO: multi-line string literals
+/// TODO: multi-line comments
+/// TODO: Hex/Octal/Binary integer representations
+
+pub struct Lexer<'a> {
+    source: &'a mut RatSource,
     tokens: VecDeque<Token>,
     errors: Vec<RatError>,
 }
-
-impl Lexer {
-    pub fn init(source: RatSource) -> Self {
+impl<'a> Lexer<'a> {
+    /// constructor
+    pub fn init(source: &'a mut RatSource) -> Self {
         Lexer {
             source,
             tokens: VecDeque::new(),
             errors: Vec::new(),
         }
     }
-
+    /// returns tokens field (may be empty)
     pub fn get_tokens(&self) -> &VecDeque<Token> {
         &self.tokens
     }
-
+    /// returns errors field (may be empty)
     pub fn get_errors(&self) -> &Vec<RatError> {
         &self.errors
     }
-
+    /// populate tokens and errors with lexical data from source
     pub fn dispatch(&mut self) -> Result<(), RatError> {
         loop {
             match self.advance_token() {
                 Ok(Some(token)) => {
                     self.tokens.push_back(token.clone());
                 }
-
-                Err(err) if matches!(err.kind, ErrorKind::Lexical(_)) => {
-                    let token = self.advance_lexical_error(err)?;
+                Err(mut err) if matches!(err.kind, ErrorKind::Lexical(_)) => {
+                    let token = self.advance_lexical_error(&mut err)?;
                     self.tokens.push_back(token);
                 }
-
                 // treat Error::Kind{Io, Source} as fatal
                 Err(err) => {
                     self.tokens.clear();
@@ -61,13 +53,10 @@ impl Lexer {
             }
         }
     }
-
+    /// return next available token or error upon failure
     pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
-        match self.advance_whitespace() {
-            Some(_) => {}
-            None => return Ok(None),
-        }
-
+        self.advance_whitespace();
+        self.advance_single_line_comment();
         match self.peek() {
             None => Ok(None),
             Some('"') => self.advance_string_literal(),
@@ -77,32 +66,45 @@ impl Lexer {
             _ => self.advance_operator_or_punctuator(),
         }
     }
-
-    fn advance_whitespace(&mut self) -> Option<()> {
+    /// skip insignificant whitespace
+    fn advance_whitespace(&mut self) {
         loop {
             match self.peek() {
-                None => return None,
+                None => return,
                 // treat newline ('\n') as significant character
-                Some(ch) if !ch.is_whitespace() || ch == '\n' => return Some(()),
+                Some(ch) if !ch.is_whitespace() || ch == '\n' => return,
                 _ => {
                     self.read();
                 }
             }
         }
     }
-
+    // skip all characters past "//", up to the next newline
+    fn advance_single_line_comment(&mut self) {
+        match self.source.peek_n(2) {
+            Some(str) if str == "//" => {}
+            Some(_) => return,
+            None => return,
+        };
+        loop {
+            match self.peek() {
+                None => return,
+                Some('\n') => return,
+                Some(_) => {
+                    self.read();
+                }
+            }
+        }
+    }
+    /// lex a string literal and return a token or error upon failure
     fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
-
         let actual = self.read();
         #[cfg(debug_assertions)]
         self.verify_opening_char("advance_string_literal()", '"', actual, start_pos);
-
         let mut partial = String::from("\"");
-
         loop {
             self.match_unterminated(LexicalError::UnterminatedString, &partial, start_pos)?;
-
             let ch = self.read().unwrap();
             partial.push(ch);
             match ch {
@@ -119,17 +121,14 @@ impl Lexer {
             }
         }
     }
-
+    /// lex a character literal and return a token or error upon failure
     fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let actual = self.read();
-
         #[cfg(debug_assertions)]
         self.verify_opening_char("advance_character_literal()", '\'', actual, start_pos);
         let mut partial = String::from("\'");
-
         self.match_unterminated(LexicalError::UnterminatedCharLiteral, &partial, start_pos)?;
-
         match self.peek() {
             Some('\'') => {
                 self.consume_into(&mut partial);
@@ -145,9 +144,7 @@ impl Lexer {
                 self.consume_into(&mut partial);
             }
         }
-
         self.match_unterminated(LexicalError::UnterminatedCharLiteral, &partial, start_pos)?;
-
         match self.peek() {
             Some('\'') => {
                 self.consume_into(&mut partial);
@@ -167,42 +164,48 @@ impl Lexer {
             }
         }
     }
-
+    /// within string and character literals, advance position and return the valid escape sequence
+    /// or associated error
     fn read_escape_sequence(
         &mut self,
         partial: String,
         start_pos: Position,
     ) -> Result<String, RatError> {
-        let end_pos = self.source.position();
         match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
             Some('u') => self.read_unicode_escape(format!("{}u", partial), start_pos),
-            Some(ch) => self.lexical_error(
-                LexicalError::InvalidEscapeSequence(ch),
-                format!("{}{}", partial, ch),
-                start_pos,
-                end_pos,
-            ),
-            None => self.lexical_error(
-                LexicalError::UnterminatedEscapeSequence,
-                partial,
-                start_pos,
-                end_pos,
-            ),
+            Some(ch) => {
+                let end_pos = self.source.position();
+                self.lexical_error(
+                    LexicalError::InvalidEscapeSequence(ch),
+                    format!("{}{}", partial, ch),
+                    start_pos,
+                    end_pos,
+                )
+            }
+            None => {
+                let end_pos = self.source.position();
+                self.lexical_error(
+                    LexicalError::UnterminatedEscapeSequence,
+                    partial,
+                    start_pos,
+                    end_pos,
+                )
+            }
         }
     }
-
+    /// within an escape sequence, advance position and return the valid unicode sequence or
+    /// associated error
     fn read_unicode_escape(
         &mut self,
         partial: String,
         start_pos: Position,
     ) -> Result<String, RatError> {
         let mut sequence = String::new();
-
-        let end_pos = self.source.position();
         match self.read() {
             Some('{') => sequence.push('{'),
             Some(ch) => {
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::InvalidUnicodeEscapeOpener(ch),
                     format!("{}{}", partial, ch),
@@ -211,6 +214,7 @@ impl Lexer {
                 );
             }
             None => {
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::UnterminatedUnicodeEscape,
                     partial,
@@ -219,7 +223,6 @@ impl Lexer {
                 );
             }
         }
-
         loop {
             let end_pos = self.source.position();
             match self.read() {
@@ -227,11 +230,9 @@ impl Lexer {
                     sequence.push('}');
                     break;
                 }
-
                 Some(ch) if ch.is_ascii_hexdigit() => {
                     sequence.push(ch);
                 }
-
                 Some(ch) => {
                     return self.lexical_error(
                         LexicalError::InvalidUnicodeEscapeDigit(ch),
@@ -240,7 +241,6 @@ impl Lexer {
                         end_pos,
                     );
                 }
-
                 None => {
                     return self.lexical_error(
                         LexicalError::UnterminatedUnicodeEscape,
@@ -251,9 +251,7 @@ impl Lexer {
                 }
             }
         }
-
         let hex = &sequence[1..sequence.len() - 1];
-
         if hex.is_empty() || hex.len() > 6 {
             let end_pos = self.source.position();
             return self.lexical_error(
@@ -263,9 +261,7 @@ impl Lexer {
                 end_pos,
             );
         }
-
         let codepoint = u32::from_str_radix(hex, 16).unwrap();
-
         if codepoint > 0x10_FFFF {
             let end_pos = self.source.position();
             return self.lexical_error(
@@ -275,7 +271,6 @@ impl Lexer {
                 end_pos,
             );
         }
-
         if (0xD800..=0xDFFF).contains(&codepoint) {
             let end_pos = self.source.position();
             return self.lexical_error(
@@ -285,42 +280,33 @@ impl Lexer {
                 end_pos,
             );
         }
-
         Ok(format!("u{}", sequence))
     }
-
+    /// lex a numeric literal and return a token or error upon failure
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut partial = String::new();
-
         let prefix = self.read_digits(partial.clone(), start_pos)?;
         partial.push_str(&prefix);
-
         let mut is_floating_type = false;
-
         if matches!(self.peek(), Some('.')) {
             is_floating_type = true;
             self.consume_into(&mut partial);
             let suffix = self.read_digits(partial.clone(), start_pos)?;
             partial.push_str(&suffix);
         }
-
         let suffix = self.read_numeric_suffix(is_floating_type, partial.clone(), start_pos)?;
         partial.push_str(&suffix);
-
         let end_pos = self.source.position();
         let token = self.emit(Category::Literal, partial, start_pos, end_pos);
-
         #[cfg(debug_assertions)]
         self.verify_numeric_literal("advance_numeric_literal()", &token, start_pos);
-
         Ok(Some(token))
     }
-
+    /// advance position and read and return as many ascii digits as possible
     fn read_digits(&mut self, partial: String, start_pos: Position) -> Result<String, RatError> {
         let mut digits = String::new();
         self.accumulate(&mut digits, |ch| ch.is_ascii_digit());
-
         if digits.is_empty() {
             let end_pos = self.source.position();
             return self.lexical_error(
@@ -330,10 +316,9 @@ impl Lexer {
                 end_pos,
             );
         }
-
         Ok(digits)
     }
-
+    /// numeric literals may end with a type specifier, read here
     fn read_numeric_suffix(
         &mut self,
         is_floating_type: bool,
@@ -342,27 +327,22 @@ impl Lexer {
     ) -> Result<String, RatError> {
         let is_integral_type = |ch: char| matches!(ch, 'i' | 'c' | 'l' | 's');
         let mut suffix = String::new();
-
         match self.peek() {
             Some('d' | 'f') => {
                 self.consume_into(&mut suffix);
             }
-
             Some('u') if !is_floating_type => {
                 self.consume_into(&mut suffix);
-
                 if matches!(self.peek(), Some(ch) if is_integral_type(ch)) {
                     self.consume_into(&mut suffix);
                 }
             }
-
             Some(ch) if !is_floating_type && is_integral_type(ch) => {
                 self.consume_into(&mut suffix);
             }
-
             Some(ch) if !Category::is_delimiter(ch) => {
-                let end_pos = self.source.position();
                 let _ = self.read();
+                let end_pos = self.source.position();
                 return self.lexical_error(
                     LexicalError::UnexpectedCharAfterNumeric(ch),
                     format!("{}{}{}", partial, suffix, ch),
@@ -370,49 +350,41 @@ impl Lexer {
                     end_pos,
                 );
             }
-
             _ => {}
         };
-
         Ok(suffix)
     }
-
+    /// read as many valid characters as possible, return the longest matching symbol else return
+    /// the token as an identifier or error upon failure
     fn advance_keyword_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut partial = String::new();
-
         self.accumulate(&mut partial, |ch| ch.is_alphanumeric() || ch == '_');
-
         let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
-
         let end_pos = self.source.position();
         Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
-
+    /// read as many valid characters as possible, return the longest matching operator or
+    /// punctuator or error upon failure
     fn advance_operator_or_punctuator(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut partial = String::new();
-
         loop {
             let Some(ch) = self.peek() else { break };
-
             if ch.is_alphanumeric() || ch == '_' || (ch.is_whitespace() && ch != '\n') {
                 break;
             }
-
             let mut extended = partial.clone();
             extended.push(ch);
-
             if Category::is_any(&extended).is_some() {
                 self.consume_into(&mut partial);
             } else {
                 break;
             }
         }
-
         if partial.is_empty() {
-            let end_pos = self.source.position();
             let ch = self.read().unwrap();
+            let end_pos = self.source.position();
             return self.lexical_error(
                 LexicalError::UnexpectedChar(ch),
                 String::from(ch),
@@ -420,13 +392,11 @@ impl Lexer {
                 end_pos,
             );
         }
-
         let category = Category::is_any(&partial).unwrap_or(Category::Invalid);
-
         let end_pos = self.source.position();
         Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
-
+    /// debug assertion that function calls match prefix predicate
     fn verify_opening_char(
         &mut self,
         function_name: &str,
@@ -443,13 +413,11 @@ impl Lexer {
             None => panic!("in {:?} expected {:?}, got EOF", function_name, expected),
         }
     }
-
+    /// debug assertion that numeric literals match regex specification
     fn verify_numeric_literal(&self, function_name: &str, token: &Token, _start_pos: Position) {
         use std::sync::OnceLock;
-
         static RE: OnceLock<regex::Regex> = OnceLock::new();
         let re = RE.get_or_init(|| regex::Regex::new(r"\d+((\.\d+)?[df]?|u?[icls]?)").unwrap());
-
         assert!(
             re.is_match(&token.value),
             "in {:?} {:?} did not match regex specification",
@@ -458,21 +426,77 @@ impl Lexer {
         );
     }
 
-    fn advance_lexical_error(&mut self, err: RatError) -> Result<Token, RatError> {
-        while !matches!(self.peek(), Some('\n') | None) {
-            self.read();
+    /// upon error, read chars until the invalid token has closed
+    fn advance_lexical_error(&mut self, err: &mut RatError) -> Result<Token, RatError> {
+        let literal_delimiter = err
+            .value
+            .chars()
+            .next()
+            .filter(|ch| matches!(ch, '\'' | '"'));
+
+        let partial = &mut err.value;
+
+        let context: Box<dyn Fn(char) -> bool> = match err.kind {
+            ErrorKind::Lexical(LexicalError::UnterminatedString)
+            | ErrorKind::Lexical(LexicalError::UnterminatedCharLiteral) => {
+                Box::new(|ch| matches!(ch, '\n'))
+            }
+
+            ErrorKind::Lexical(LexicalError::UnterminatedEscapeSequence)
+            | ErrorKind::Lexical(LexicalError::UnterminatedUnicodeEscape)
+            | ErrorKind::Lexical(LexicalError::InvalidEscapeSequence(_))
+            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeOpener(_))
+            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeDigit(_))
+            | ErrorKind::Lexical(LexicalError::InvalidUnicodeDigitCount(_))
+            | ErrorKind::Lexical(LexicalError::InvalidUnicodeCodepoint(_))
+            | ErrorKind::Lexical(LexicalError::SurrogateCodepoint(_)) => {
+                let delimiter = literal_delimiter;
+                Box::new(move |ch| match delimiter {
+                    Some(delim) => matches!(ch, '\n') || ch == delim,
+                    None => matches!(ch, '\'' | '"' | '\n'),
+                })
+            }
+
+            ErrorKind::Lexical(LexicalError::EmptyCharLiteral)
+            | ErrorKind::Lexical(LexicalError::MultipleCharsInLiteral) => Box::new(|_| true),
+
+            ErrorKind::Lexical(LexicalError::UnexpectedChar(_)) => Box::new(|_| true),
+
+            ErrorKind::Lexical(LexicalError::UnexpectedCharAfterNumeric(_))
+            | ErrorKind::Lexical(LexicalError::NoDigitsInNumericLiteral) => {
+                Box::new(|ch: char| Category::is_delimiter(ch))
+            }
+            _ => {
+                panic!("unexpected ErrorKind in advance_lexical_error()");
+            }
+        };
+
+        while let Some(ch) = self.peek() {
+            if context(ch) {
+                if matches!(ch, '\'' | '"') {
+                    let two = self.source.peek_n(2).unwrap_or_default();
+                    if two.starts_with('\\') {
+                        self.read().map(|c| partial.push(c));
+                        self.read().map(|c| partial.push(c));
+                        continue;
+                    }
+                    self.read().map(|c| partial.push(c));
+                }
+                break;
+            }
+            self.read().map(|c| partial.push(c));
         }
 
         self.errors.push(err.clone());
-        let token = Token::new(Category::Invalid, err.value, err.span);
-
+        err.span = Span::set(err.span.start_pos, self.source.position());
+        let token = Token::new(Category::Invalid, err.value.clone(), err.span);
         Ok(token)
     }
 
+    /// helper function to read as many chars which match a predicate
     #[inline]
     fn accumulate(&mut self, partial: &mut String, pred: impl Fn(char) -> bool) -> usize {
         let mut chars_read = 0;
-
         while let Some(ch) = self.source.peek() {
             if !pred(ch) {
                 break;
@@ -480,10 +504,9 @@ impl Lexer {
             partial.push(self.source.read().unwrap());
             chars_read += 1;
         }
-
         chars_read
     }
-
+    /// helper function to ensure certain sequences are terminated
     #[inline]
     fn match_unterminated(
         &mut self,
@@ -499,7 +522,7 @@ impl Lexer {
             _ => Ok(()),
         }
     }
-
+    /// given a peek() call returns an expected char, push into a partial string from a source read() call
     #[inline]
     fn consume_into(&mut self, partial: &mut String) -> char {
         let ch = self
@@ -508,17 +531,17 @@ impl Lexer {
         partial.push(ch);
         ch
     }
-
+    /// helper read alias
     #[inline]
     fn read(&mut self) -> Option<char> {
         self.source.read()
     }
-
+    /// helper peek alias
     #[inline]
     fn peek(&mut self) -> Option<char> {
         self.source.peek()
     }
-
+    /// helper token constructor alias
     #[inline]
     fn emit(
         &mut self,
@@ -529,7 +552,7 @@ impl Lexer {
     ) -> Token {
         Token::new(category, value, Span::set(start_pos, end_pos))
     }
-
+    /// helper error constructor alias
     #[inline]
     fn lexical_error<T>(
         &mut self,

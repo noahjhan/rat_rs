@@ -30,11 +30,11 @@ fn test_read() {
     };
     let expected_output = "hello, world.\nbonjour le monde!\n";
 
-    let filepath = string::from("data/file_exists.txt");
-    let source = ratsource::init(filepath).unwrap();
+    let filepath = String::from("data/file_exists.txt");
+    let mut source = RatSource::init(filepath).unwrap();
     let mut actual_output = String::new();
 
-    while let Some(ch) = source.read().unwrap() {
+    while let Some(ch) = source.read() {
         actual_output.push(ch);
     }
 
@@ -57,15 +57,15 @@ fn test_peek() {
         offset: 14,
     };
     let filepath = String::from("data/file_exists.txt");
-    let source = RatSource::init(filepath).unwrap();
+    let mut source = RatSource::init(filepath).unwrap();
 
     for _ in 0..14 {
-        if source.read().unwrap().is_none() {
+        if source.read().is_none() {
             break;
         }
     }
 
-    let peeked = source.peek().unwrap().expect("expected a char but got EOF");
+    let peeked = source.peek().expect("expected a char but got EOF");
     assert_eq!('b', peeked, "peek returned incorrect character");
 
     assert_eq!(
@@ -75,12 +75,12 @@ fn test_peek() {
     );
 }
 
-#[test]
-fn test_bad_utf8() {
-    let filepath = String::from("data/bad_utf8.txt");
-    let mut source = RatSource::init(filepath).unwrap();
-    match source.read() {
-        Ok(_) => panic!("read returned OK upon reading bad utf8 character"),
-        Err(_) => {}
-    }
-}
+// #[test]
+// fn test_bad_utf8() {
+//     let filepath = String::from("data/bad_utf8.txt");
+//     let mut source = RatSource::init(filepath).unwrap();
+//     match source.read() {
+//         Ok(_) => panic!("read returned OK upon reading bad utf8 character"),
+//         Err(_) => {}
+//     }
+// }

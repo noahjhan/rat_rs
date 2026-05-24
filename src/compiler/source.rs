@@ -69,7 +69,11 @@ impl RatSource {
         self.peeked
     }
 
-    pub fn position(&mut self) -> Position {
+    pub fn peek_n(&mut self, n: usize) -> Option<&str> {
+        self.source.get(self.offset..self.offset + n)
+    }
+
+    pub fn position(&self) -> Position {
         Position {
             line: self.line,
             col: self.col,

@@ -8,6 +8,8 @@ fn foo(x: int): int {
 
   let z: float = 3.0uf
   io::println(z)
+  
+  let ig: string == "read past me"
 
   let c: string = "hello\u{}"
   let f: string = "unterminated
