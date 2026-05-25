@@ -5,6 +5,7 @@ pub struct Parser {
     source: RatSource,
     tokens: VecDeque<Token>,
     symbol_table: SymbolTable,
+    program: Ast,
 }
 
 impl Parser {
@@ -13,26 +14,55 @@ impl Parser {
             source,
             tokens,
             symbol_table: SymbolTable::init(),
+            program: Ast::Program {
+                statements: Vec::new(),
+            },
         }
     }
 
-    pub fn dispatch(&mut self) -> Result<Ast, RatError> {
-        self.check_scope();
+    pub fn dispatch(&mut self) -> Result<Option<Ast>, RatError> {
+        // remove this
 
-        {
-            // remove this
-            let _ = self.source;
-            let _ = self.tokens;
-            let _ = self.check("");
-            let _ = self.expect("");
+        if self.tokens.is_empty() {
+            return Ok(None);
         }
 
-        Ok(Ast::Program {
-            statements: Vec::new(),
-        })
+        loop {
+            self.parse_newline();
+            self.parse_scope();
+
+            let token = match self.advance() {
+                Some(t) => t,
+                None => break,
+            };
+
+            let ast = Ast::Invalid { token };
+
+            if let Ast::Program { statements } = &mut self.program {
+                statements.push(ast);
+            }
+        }
+
+        Ok(Some(self.program.clone()))
     }
 
-    fn check_scope(&mut self) {
+    fn parse_newline(&mut self) {
+        loop {
+            let token = match self.peek() {
+                Some(token) => token,
+                None => return,
+            };
+
+            match (token.category, token.value.as_str()) {
+                (Category::Punctuator, "\n") => {
+                    self.advance();
+                }
+                _ => return,
+            }
+        }
+    }
+
+    fn parse_scope(&mut self) {
         let token = match self.peek() {
             Some(token) => token,
             None => return,

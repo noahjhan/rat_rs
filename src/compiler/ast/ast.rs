@@ -1,6 +1,6 @@
 use crate::compiler::{Kind, Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Ast {
     Program {
         statements: Vec<Ast>,
@@ -27,15 +27,19 @@ pub enum Ast {
         next: Option<Box<Ast>>,
         body: Box<Ast>,
     },
+
+    Invalid {
+        token: Token,
+    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Parameter {
     pub identifier: Token,
     pub param_type: Token,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     BinaryExpr {
         lhs: Box<Expr>,
@@ -43,23 +47,28 @@ pub enum Expr {
         rhs: Box<Expr>,
         kind: Kind,
     },
+
     UnaryExpr {
         expr: Box<Expr>,
         op: Token,
         kind: Kind,
     },
+
     NumericLiteral {
         value: Token,
         kind: Kind,
     },
+
     StringLiteral {
         value: Token,
         kind: Kind,
     },
+
     Identifier {
         value: Token,
         kind: Kind,
     },
+
     FunctionCall {
         identifier: Token,
         kind: Kind,

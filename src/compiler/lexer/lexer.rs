@@ -26,15 +26,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn get_tokens(&self) -> &VecDeque<Token> {
-        &self.tokens
-    }
-
-    pub fn get_errors(&self) -> &Vec<RatError> {
-        &self.errors
-    }
-
-    pub fn dispatch(&mut self) -> Result<(), RatError> {
+    pub fn dispatch(&mut self) -> Result<(VecDeque<Token>, Vec<RatError>), RatError> {
         loop {
             match self.advance_token() {
                 Ok(Some(token))
@@ -55,7 +47,7 @@ impl<'a> Lexer<'a> {
                     self.errors.clear();
                     return Err(err);
                 }
-                Ok(None) => return Ok(()),
+                Ok(None) => return Ok((self.tokens.clone(), self.errors.clone())),
             }
         }
     }
