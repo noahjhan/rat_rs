@@ -20,4 +20,5 @@ pub use parser::Parser;
 
 pub use semantics::{Scope, Symbol, SymbolTable};
 
+pub use source::context::ReadContext;
 pub use source::RatSource;
