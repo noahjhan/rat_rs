@@ -1,25 +1,23 @@
-mod ast;
-mod compile;
-mod error;
-mod lexer;
-mod parser;
-mod recovery;
-mod render;
-mod scope;
-mod source;
-mod span;
-mod symbol_table;
-mod token;
+pub mod ast;
+pub mod compile;
+pub mod diagnostics;
+pub mod lexer;
+pub mod parser;
+pub mod semantics;
+pub mod source;
 
 pub use ast::{Ast, Expr, Parameter};
 pub use compile::compile;
-pub use error::{ErrorKind, LexicalError, ParseError, RatError};
-pub use lexer::Lexer;
+
+pub use diagnostics::{ErrorKind, LexicalError, ParseError, Position, RatError, Render, Span};
+
+pub use lexer::{
+    Category, ConstituentIdentifier, ConstituentKeyword, ConstituentLiteral, ConstituentOperator,
+    ConstituentPunctuator, ConstituentType, Kind, Lexer, Recovery, Token,
+};
+
 pub use parser::Parser;
-pub use recovery::Recovery;
-pub use render::Render;
-pub use scope::Scope;
+
+pub use semantics::{Scope, Symbol, SymbolTable};
+
 pub use source::RatSource;
-pub use span::{Position, Span};
-pub use symbol_table::SymbolTable;
-pub use token::{Category, Kind, Token};

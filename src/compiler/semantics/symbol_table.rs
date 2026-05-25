@@ -1,4 +1,4 @@
-use crate::compiler::{Scope, Token};
+use crate::compiler::{Scope, Symbol};
 
 pub struct SymbolTable {
     stack: Vec<Scope>,
@@ -26,10 +26,10 @@ impl SymbolTable {
         assert!(!self.stack.is_empty(), "cannot exit global scope")
     }
 
-    pub fn insert_symbol(&mut self, token: Token) {
+    pub fn insert_symbol(&mut self, symbol: Symbol) {
         match self.stack.last_mut() {
             Some(scope) => {
-                scope.insert_symbol(token);
+                scope.insert_symbol(symbol);
             }
             None => {
                 panic!("symbol table must always contain global scope")
