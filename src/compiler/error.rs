@@ -125,10 +125,10 @@ impl std::fmt::Display for LexicalError {
                 write!(f, "unterminated character literal")
             }
             Self::UnterminatedEscapeSequence => {
-                write!(f, "unterminated escape sequence at EOF")
+                write!(f, "unterminated escape sequence")
             }
             Self::UnterminatedUnicodeEscape => {
-                write!(f, "unterminated unicode escape sequence")
+                write!(f, "unterminated unicode escape")
             }
             Self::EmptyCharLiteral => {
                 write!(f, "empty character literal")

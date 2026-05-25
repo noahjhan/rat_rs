@@ -1,5 +1,5 @@
 use crate::compiler::{
-    Category, ErrorKind, LexicalError, Position, RatError, RatSource, Span, Token,
+    Category, ErrorKind, LexicalError, Position, RatError, RatSource, Recovery, Span, Token,
 };
 
 use std::collections::VecDeque;
@@ -103,7 +103,7 @@ impl<'a> Lexer<'a> {
 
     /// skip all characters past "//", up to the next newline
     fn advance_single_line_comment(&mut self) {
-        match self.source.peek_n(2) {
+        match self.peek_n(2) {
             Some(str) if str == "//" => {}
 
             Some(_) => return,
@@ -126,7 +126,7 @@ impl<'a> Lexer<'a> {
 
     /// skip all characters between "/*" and "*/", including nested sequences
     fn advance_multi_line_comment(&mut self) -> Result<(), RatError> {
-        match self.source.peek_n(2) {
+        match self.peek_n(2) {
             Some(str) if str == "/*" => {}
 
             _ => return Ok(()),
@@ -142,7 +142,7 @@ impl<'a> Lexer<'a> {
         stack.push(());
 
         while !stack.is_empty() {
-            match self.source.peek_n(2) {
+            match self.peek_n(2) {
                 Some(str) if str == "/*" => {
                     partial.push(self.read().unwrap());
                     partial.push(self.read().unwrap());
@@ -481,6 +481,7 @@ impl<'a> Lexer<'a> {
 
         Ok(suffix)
     }
+
     /// read as many valid characters as possible, return the longest matching symbol else return
     /// the token as an identifier or error upon failure
     fn advance_keyword_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
@@ -494,6 +495,7 @@ impl<'a> Lexer<'a> {
 
         Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
+
     /// read as many valid characters as possible, return the longest matching operator or
     /// punctuator or error upon failure
     fn advance_operator_or_punctuator(&mut self) -> Result<Option<Token>, RatError> {
@@ -567,92 +569,40 @@ impl<'a> Lexer<'a> {
 
     /// upon error, read chars until the invalid token has closed
     fn advance_lexical_error(&mut self, err: &mut RatError) -> Result<Token, RatError> {
-        let first_char = err.clone().value.chars().next().unwrap_or('\0');
-        let literal_delimiter = err
-            .value
-            .chars()
-            .next()
-            .filter(|ch| matches!(ch, '\'' | '"'));
-
+        let recovery = Recovery::from_error(err);
         let partial = &mut err.value;
-        let mut search_for_quote = false;
 
-        let context: Box<dyn Fn(char) -> bool> = match err.kind {
-            ErrorKind::Lexical(LexicalError::UnterminatedMultiLineComment)
-            | ErrorKind::Lexical(LexicalError::UnterminatedString)
-            | ErrorKind::Lexical(LexicalError::UnterminatedCharLiteral) => {
-                Box::new(|ch| matches!(ch, '\n'))
-            }
-
-            ErrorKind::Lexical(LexicalError::UnterminatedEscapeSequence)
-            | ErrorKind::Lexical(LexicalError::UnterminatedUnicodeEscape)
-            | ErrorKind::Lexical(LexicalError::InvalidEscapeSequence(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeOpener(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeDigit(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeDigitCount(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeCodepoint(_))
-            | ErrorKind::Lexical(LexicalError::SurrogateCodepoint(_)) => {
-                search_for_quote = true;
-                let delimiter = literal_delimiter;
-                Box::new(move |ch| match delimiter {
-                    Some(delim) => matches!(ch, '\n') || ch == delim,
-                    None => matches!(ch, '\'' | '"' | '\n'),
-                })
-            }
-
-            ErrorKind::Lexical(LexicalError::EmptyCharLiteral)
-            | ErrorKind::Lexical(LexicalError::MultipleCharsInLiteral) => Box::new(|_| true),
-
-            ErrorKind::Lexical(LexicalError::UnexpectedChar(_)) => Box::new(|_| true),
-
-            ErrorKind::Lexical(LexicalError::UnexpectedCharAfterNumeric(_))
-            | ErrorKind::Lexical(LexicalError::NoDigitsInNumericLiteral) => {
-                Box::new(|ch: char| Category::is_delimiter(ch))
-            }
-
-            _ => {
-                panic!("unexpected ErrorKind in advance_lexical_error()");
-            }
-        };
+        let opener = partial.chars().next().filter(|ch| matches!(ch, '\'' | '"'));
 
         while let Some(ch) = self.peek() {
-            match self.source.peek_n(2) {
-                Some(str) if str == "\\'" && first_char == '\'' => {
-                    self.read().map(|c| partial.push(c));
-                    self.read().map(|c| partial.push(c));
-                    continue;
-                }
-
-                Some(str) if str == "\\\"" && first_char == '"' => {
-                    self.read().map(|c| partial.push(c));
-                    self.read().map(|c| partial.push(c));
-                    continue;
-                }
-
-                Some(_) => {}
-
-                None => {}
-            };
-
-            if context(ch) {
-                match ch {
-                    '\'' | '"' if search_for_quote => {
+            if recovery.skips_escapes() {
+                if let Some(two) = self.peek_n(2) {
+                    let is_escaped_opener = match opener {
+                        Some('\'') => two == "\\'",
+                        Some('"') => two == "\\\"",
+                        _ => false,
+                    };
+                    if is_escaped_opener {
                         self.read().map(|c| partial.push(c));
+                        self.read().map(|c| partial.push(c));
+                        continue;
                     }
+                }
+            }
 
-                    _ => {}
-                };
+            if recovery.is_stop(ch) {
+                if recovery.consume_stop() && matches!(ch, '\'' | '"') {
+                    self.read().map(|c| partial.push(c));
+                }
                 break;
             }
 
             self.read().map(|c| partial.push(c));
-            continue;
         }
 
         self.errors.push(err.clone());
         err.span = Span::set(err.span.start_pos, self.source.position());
         let token = Token::new(Category::Invalid, err.value.clone(), err.span);
-
         Ok(token)
     }
 
@@ -709,6 +659,10 @@ impl<'a> Lexer<'a> {
     #[inline]
     fn peek(&mut self) -> Option<char> {
         self.source.peek()
+    }
+
+    fn peek_n(&mut self, n: usize) -> Option<&str> {
+        self.source.peek_n(n)
     }
 
     /// helper token constructor alias
