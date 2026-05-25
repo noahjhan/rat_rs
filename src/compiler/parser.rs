@@ -17,8 +17,7 @@ impl Parser {
     }
 
     pub fn dispatch(&mut self) -> Result<Ast, RatError> {
-        self.check_enter_scope();
-        self.check_exit_scope();
+        self.check_scope();
 
         {
             // remove this
@@ -33,27 +32,24 @@ impl Parser {
         })
     }
 
-    fn check_enter_scope(&mut self) {
+    fn check_scope(&mut self) {
         let token = match self.peek() {
             Some(token) => token,
             None => return,
         };
 
-        if token.kind == Category::Punctuator && token.value == "{" {
-            self.advance();
-            self.symbol_table.enter_scope();
-        }
-    }
+        match (token.category, token.value.as_str()) {
+            (Category::Punctuator, "}") => {
+                self.advance();
+                self.symbol_table.exit_scope();
+            }
 
-    fn check_exit_scope(&mut self) {
-        let token = match self.peek() {
-            Some(token) => token,
-            None => return,
-        };
+            (Category::Punctuator, "{") => {
+                self.advance();
+                self.symbol_table.enter_scope();
+            }
 
-        if token.kind == Category::Punctuator && token.value == "}" {
-            self.advance();
-            self.symbol_table.exit_scope();
+            _ => {}
         }
     }
 

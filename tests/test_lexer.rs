@@ -29,8 +29,8 @@ fn test_advance_string_literal() {
         .expect("advance returned None before first token");
 
     assert_eq!(
-        expected_first.kind, actual_first.kind,
-        "wrong kind for first token"
+        expected_first.category, actual_first.category,
+        "wrong category for first token"
     );
     assert_eq!(
         expected_first.value, actual_first.value,
@@ -64,8 +64,8 @@ fn test_advance_string_literal() {
         .expect("advance returned None before newline token");
 
     assert_eq!(
-        expected_second.kind, actual_second.kind,
-        "wrong kind for second token"
+        expected_second.category, actual_second.category,
+        "wrong category for second token"
     );
     assert_eq!(
         expected_second.value, actual_second.value,
