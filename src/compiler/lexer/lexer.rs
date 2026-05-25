@@ -95,10 +95,6 @@ impl<'a> Lexer<'a> {
             return Ok(Some(token));
         }
 
-        if let Some((_, action)) = actions.iter().find(|(pred, _)| pred(ch)) {
-            return action(self);
-        }
-
         self.unexpected_char()
     }
 
