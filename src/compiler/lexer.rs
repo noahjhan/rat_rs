@@ -534,6 +534,7 @@ impl<'a> Lexer<'a> {
 
         Ok(Some(self.emit(category, partial, start_pos, end_pos)))
     }
+
     /// debug assertion that function calls match prefix predicate
     fn verify_opening_char(
         &mut self,
@@ -553,6 +554,7 @@ impl<'a> Lexer<'a> {
             None => panic!("in {:?} expected {:?}, got EOF", function_name, expected),
         }
     }
+
     /// debug assertion that numeric literals match regex specification
     fn verify_numeric_literal(&self, function_name: &str, token: &Token, _start_pos: Position) {
         use std::sync::OnceLock;

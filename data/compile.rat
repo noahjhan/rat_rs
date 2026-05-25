@@ -4,6 +4,7 @@ fn foo(x: int): int {
   let y: int = x
   io::println(y)
 
+  let weird? = 3
   let fnx: int = 10
 
   let z: float = 3.0uf
