@@ -72,15 +72,15 @@ impl<'a> Lexer<'a> {
 
         type Action<'s> = fn(&mut Lexer<'s>) -> Result<Option<Token>, RatError>;
         let actions: &[(fn(char) -> bool, Action)] = &[
-            (|c| c == '"', Self::advance_string_literal),
-            (|c| c == '\'', Self::advance_character_literal),
-            (|c| c.is_ascii_digit(), Self::advance_numeric_literal),
+            (|ch| ch == '"', Self::advance_string_literal),
+            (|ch| ch == '\'', Self::advance_character_literal),
+            (|ch| ch.is_ascii_digit(), Self::advance_numeric_literal),
             (
-                |c| c.is_alphabetic() || c == '_',
+                |ch| ch.is_alphabetic() || ch == '_',
                 Self::advance_keyword_or_identifier,
             ),
             (
-                |c| c.is_ascii_punctuation() || c == '\n',
+                |ch| ch.is_ascii_punctuation() || ch == '\n',
                 Self::advance_operator_or_punctuator,
             ),
         ];
@@ -95,11 +95,11 @@ impl<'a> Lexer<'a> {
             return Ok(Some(token));
         }
 
-        let start_pos = self.source.position();
-        let ch = self.read().unwrap();
-        let context = ReadContext::with_prefix(start_pos, String::from(ch));
-        let end_pos = self.source.position();
-        context.error(LexicalError::UnexpectedChar(ch), end_pos)
+        if let Some((_, action)) = actions.iter().find(|(pred, _)| pred(ch)) {
+            return action(self);
+        }
+
+        self.unexpected_char()
     }
 
     fn advance_whitespace(&mut self) {
@@ -427,6 +427,16 @@ impl<'a> Lexer<'a> {
 
         let category = Category::is_any(&result).unwrap_or(Category::Invalid);
         Ok(Some(Token::new(category, result, span)))
+    }
+
+    fn unexpected_char(&mut self) -> Result<Option<Token>, RatError> {
+        let start_pos = self.source.position();
+        let ch = self.read().unwrap();
+
+        let context = ReadContext::with_prefix(start_pos, String::from(ch));
+        let end_pos = self.source.position();
+
+        context.error(LexicalError::UnexpectedChar(ch), end_pos)
     }
 
     fn verify_opening_char(
