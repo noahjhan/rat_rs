@@ -1,4 +1,4 @@
-use crate::compiler::{Kind, Token};
+use crate::compiler::{Kind, Span, Token};
 
 #[derive(Debug, Clone)]
 pub enum Ast {
@@ -7,13 +7,15 @@ pub enum Ast {
     },
 
     VariableDecl {
-        identifier: Token,
+        identifier: String,
+        span: Span,
         kind: Kind,
         expr: Expr,
     },
 
     FunctionDecl {
-        identifier: Token,
+        identifier: String,
+        span: Span,
         kind: Kind,
         parameters: Vec<Parameter>,
         return_type: Token,
@@ -21,7 +23,9 @@ pub enum Ast {
     },
 
     ConditionalStatement {
-        keyword: Token,
+        /// TODO: replace with enum
+        keyword: String,
+        span: Span,
         kind: Kind,
         expr: Expr,
         next: Option<Box<Ast>>,
@@ -35,7 +39,7 @@ pub enum Ast {
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
-    pub identifier: Token,
+    pub token: Token,
     pub param_type: Token,
 }
 
@@ -43,34 +47,60 @@ pub struct Parameter {
 pub enum Expr {
     BinaryExpr {
         lhs: Box<Expr>,
-        op: Token,
+        /// TODO: replace with enum
+        op: String,
         rhs: Box<Expr>,
+        span: Span,
         kind: Kind,
     },
 
     UnaryExpr {
         expr: Box<Expr>,
-        op: Token,
+        /// TODO: replace with enum
+        op: String,
+        span: Span,
         kind: Kind,
     },
 
     NumericLiteral {
-        value: Token,
+        literal: String,
+        span: Span,
         kind: Kind,
     },
 
     StringLiteral {
-        value: Token,
+        literal: String,
+        span: Span,
+        kind: Kind,
+    },
+
+    CharacterLiteral {
+        literal: String,
+        span: Span,
+        kind: Kind,
+    },
+
+    BooleanLiteral {
+        /// TODO: replace with enum
+        keyword: String,
+        span: Span,
+        kind: Kind,
+    },
+
+    NullLiteral {
+        span: Span,
         kind: Kind,
     },
 
     Identifier {
-        value: Token,
+        identifier: String,
+        span: Span,
         kind: Kind,
     },
 
     FunctionCall {
-        identifier: Token,
+        identifier: String,
+        span: Span,
         kind: Kind,
         parameters: Vec<Expr>,
     },

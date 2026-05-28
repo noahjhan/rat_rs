@@ -23,17 +23,17 @@ pub fn compile(filepath: String, verbose: bool) {
     };
 
     let mut render = Render::init(&mut source);
-    // for token in &tokens {
-    //     if verbose {
-    //         token.debug_print();
-    //     }
-    // }
+    for token in &tokens {
+        if verbose {
+            token.debug_print();
+        }
+    }
 
     for err in errors {
         render.print(err);
     }
 
-    let mut parser = Parser::init(source, tokens);
+    let mut parser = Parser::init(tokens);
     let program = match parser.dispatch() {
         Ok(Some(program)) => program,
         _ => return,
@@ -46,7 +46,7 @@ pub fn compile(filepath: String, verbose: bool) {
     if let Ast::Program { statements } = program {
         for ast in statements {
             if let Ast::Invalid { token } = ast {
-                token.debug_print();
+                // token.debug_print();
             }
         }
     }

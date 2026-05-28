@@ -68,6 +68,7 @@ impl Category {
             s,
             "let"
                 | "op"
+                | "class"
                 | "fn"
                 | "fn_"
                 | "fn?"

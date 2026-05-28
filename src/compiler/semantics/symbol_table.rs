@@ -26,6 +26,14 @@ impl SymbolTable {
         assert!(!self.stack.is_empty(), "cannot exit global scope")
     }
 
+    pub fn contains(&self, key: &str) -> bool {
+        self.stack.iter().rev().any(|scope| scope.contains(key))
+    }
+
+    pub fn lookup(&self, key: &str) -> Option<&Symbol> {
+        self.stack.iter().rev().find_map(|scope| scope.lookup(key))
+    }
+
     pub fn insert_symbol(&mut self, symbol: Symbol) {
         match self.stack.last_mut() {
             Some(scope) => {

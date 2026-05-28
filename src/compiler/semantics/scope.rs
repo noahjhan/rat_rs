@@ -13,6 +13,14 @@ impl Scope {
         }
     }
 
+    pub fn contains(&self, key: &str) -> bool {
+        self.symbols.contains_key(key)
+    }
+
+    pub fn lookup(&self, key: &str) -> Option<&Symbol> {
+        self.symbols.get(key)?.last()
+    }
+
     pub fn insert_symbol(&mut self, symbol: Symbol) {
         let value = symbol.token.value.clone();
 

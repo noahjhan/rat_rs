@@ -43,7 +43,7 @@ fn main() {
                       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  
     "#;
 
-    println!("{}", ascii_ratty);
+    // println!("{}", ascii_ratty);
     println!("bonjour le monde!");
 
     let filepath = String::from("data/compile.rat");
