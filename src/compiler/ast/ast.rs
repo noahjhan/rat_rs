@@ -1,4 +1,4 @@
-use crate::compiler::{Kind, Span, Token};
+use crate::compiler::{Category, Kind, Span, Token};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -75,4 +75,18 @@ pub enum Expr {
         span: Span,
         parameters: Vec<Expr>,
     },
+}
+
+pub fn generate_ast_primative(token: Token) -> Stmt {
+    match token.category {
+        Category::Identifier => Stmt::ExprStmt(Expr::Identifier {
+            identifier: token.value,
+            span: token.span,
+        }),
+        Category::Literal => Stmt::ExprStmt(Expr::Literal {
+            value: token.value,
+            span: token.span,
+        }),
+        _ => Stmt::Invalid { token },
+    }
 }

@@ -6,7 +6,7 @@ pub mod parser;
 pub mod semantics;
 pub mod source;
 
-pub use ast::{Expr, Parameter, Program, Stmt};
+pub use ast::{generate_ast_primative, Expr, Parameter, Program, Stmt};
 pub use compile::compile;
 
 pub use diagnostics::{ErrorKind, LexicalError, ParseError, Position, RatError, Render, Span};

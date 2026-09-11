@@ -1,4 +1,4 @@
-use crate::compiler::{Category, Expr, Program, RatError, Stmt, Token};
+use crate::compiler::{generate_ast_primative, Category, Program, RatError, Stmt, Token};
 
 use std::collections::VecDeque;
 
@@ -29,14 +29,8 @@ impl Parser {
             };
 
             let stmt = match token.category {
-                Category::Identifier => Stmt::ExprStmt(Expr::Identifier {
-                    identifier: token.value.clone(),
-                    span: token.span,
-                }),
-                Category::Literal => Stmt::ExprStmt(Expr::Literal {
-                    value: token.value.clone(),
-                    span: token.span,
-                }),
+                Category::Identifier => generate_ast_primative(token.clone()),
+                Category::Literal => generate_ast_primative(token.clone()),
                 Category::Invalid => Stmt::Invalid {
                     token: token.clone(),
                 },
