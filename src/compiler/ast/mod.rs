@@ -1,3 +1,3 @@
 pub mod ast;
 
-pub use ast::{Ast, Expr, Parameter};
+pub use ast::{Expr, Parameter, Program, Stmt};

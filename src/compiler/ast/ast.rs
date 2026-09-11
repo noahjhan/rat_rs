@@ -1,107 +1,78 @@
 use crate::compiler::{Kind, Span, Token};
 
 #[derive(Debug, Clone)]
-pub enum Ast {
-    Program {
-        statements: Vec<Ast>,
-    },
+pub struct Program {
+    pub statements: Vec<Stmt>,
+}
 
+#[derive(Debug, Clone)]
+pub enum Stmt {
     VariableDecl {
         identifier: String,
         span: Span,
-        kind: Kind,
         expr: Expr,
     },
 
     FunctionDecl {
-        identifier: String,
-        span: Span,
+        identifier: Token,
         kind: Kind,
         parameters: Vec<Parameter>,
         return_type: Token,
-        body: Box<Ast>,
+        body: Program,
     },
 
     ConditionalStatement {
-        /// TODO: replace with enum
-        keyword: String,
-        span: Span,
+        keyword: Token,
         kind: Kind,
         expr: Expr,
-        next: Option<Box<Ast>>,
-        body: Box<Ast>,
+        next: Box<Stmt>,
+        body: Program,
     },
+
+    ExprStmt(Expr),
 
     Invalid {
         token: Token,
     },
+
+    Unimplemented {},
 }
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
-    pub token: Token,
+    pub identifier: Token,
     pub param_type: Token,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     BinaryExpr {
-        lhs: Box<Expr>,
-        /// TODO: replace with enum
-        op: String,
-        rhs: Box<Expr>,
         span: Span,
-        kind: Kind,
+        op: Kind,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
     },
 
     UnaryExpr {
+        span: Span,
+        op: Kind,
         expr: Box<Expr>,
-        /// TODO: replace with enum
-        op: String,
-        span: Span,
-        kind: Kind,
-    },
-
-    NumericLiteral {
-        literal: String,
-        span: Span,
-        kind: Kind,
-    },
-
-    StringLiteral {
-        literal: String,
-        span: Span,
-        kind: Kind,
-    },
-
-    CharacterLiteral {
-        literal: String,
-        span: Span,
-        kind: Kind,
-    },
-
-    BooleanLiteral {
-        /// TODO: replace with enum
-        keyword: String,
-        span: Span,
-        kind: Kind,
-    },
-
-    NullLiteral {
-        span: Span,
-        kind: Kind,
     },
 
     Identifier {
         identifier: String,
         span: Span,
-        kind: Kind,
+    },
+
+    Literal {
+        value: String,
+        span: Span,
+        // kind: Kind,
     },
 
     FunctionCall {
         identifier: String,
         span: Span,
-        kind: Kind,
         parameters: Vec<Expr>,
     },
 }

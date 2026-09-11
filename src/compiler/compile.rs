@@ -1,4 +1,4 @@
-use crate::compiler::{Ast, Lexer, Parser, RatSource, Render};
+use crate::compiler::{Lexer, Parser, RatSource, Render};
 
 pub fn compile(filepath: String, verbose: bool) {
     let mut source = match RatSource::init(filepath) {
@@ -34,7 +34,7 @@ pub fn compile(filepath: String, verbose: bool) {
     }
 
     let mut parser = Parser::init(tokens);
-    let program = match parser.dispatch() {
+    let ast = match parser.dispatch() {
         Ok(Some(program)) => program,
         _ => return,
     };
@@ -43,11 +43,5 @@ pub fn compile(filepath: String, verbose: bool) {
         return;
     }
 
-    if let Ast::Program { statements } = program {
-        for ast in statements {
-            if let Ast::Invalid { token } = ast {
-                // token.debug_print();
-            }
-        }
-    }
+    println!("{:#?}", ast);
 }
