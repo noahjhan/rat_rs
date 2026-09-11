@@ -1,4 +1,4 @@
-use crate::compiler::{generate_ast_primative, Category, Program, RatError, Stmt, Token};
+use crate::compiler::{Category, ConstituentOperator, Expr, Kind, Program, RatError, Stmt, Token};
 
 use std::collections::VecDeque;
 
@@ -29,8 +29,12 @@ impl Parser {
             };
 
             let stmt = match token.category {
-                Category::Identifier => generate_ast_primative(token.clone()),
-                Category::Literal => generate_ast_primative(token.clone()),
+                Category::Literal | Category::Identifier | Category::Operator => {
+                    Stmt::ExprStmt(self.recurse_expr().unwrap())
+                } // fix unwrap
+
+                // Category::Identifier => Stmt::ExprStmt(self.generate_ast_primative(token.clone())),
+                // Category::Literal => Stmt::ExprStmt(self.generate_ast_primative(token.clone())),
                 Category::Invalid => Stmt::Invalid {
                     token: token.clone(),
                 },
@@ -44,6 +48,124 @@ impl Parser {
         Ok(Some(self.program.clone()))
     }
 
+    fn recurse_expr(&mut self) -> Option<Expr> {
+        self.recurse_logical()
+    }
+
+    fn recurse_logical(&mut self) -> Option<Expr> {
+        self.recurse_comparative()
+    }
+
+    fn recurse_comparative(&mut self) -> Option<Expr> {
+        self.recurse_shift()
+    }
+
+    fn recurse_shift(&mut self) -> Option<Expr> {
+        self.recurse_additive()
+    }
+
+    fn recurse_additive(&mut self) -> Option<Expr> {
+        self.recurse_multiplicative()
+    }
+
+    fn recurse_multiplicative(&mut self) -> Option<Expr> {
+        let mut lhs = self.recurse_unary()?;
+
+        loop {
+            let token = match self.peek() {
+                Some(token) => token.clone(),
+                None => break,
+            };
+
+            let op = match token.value.as_str() {
+                "*" => ConstituentOperator::Mul,
+                "/" => ConstituentOperator::Div,
+                "%" => ConstituentOperator::Mod,
+                _ => break,
+            };
+
+            self.advance();
+
+            let rhs = self.recurse_unary()?;
+
+            lhs = Expr::BinaryExpr {
+                span: token.span,
+                op: Kind::Operator(op),
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            };
+        }
+
+        Some(lhs)
+    }
+
+    fn recurse_unary(&mut self) -> Option<Expr> {
+        let token = match self.peek() {
+            Some(token) => token.clone(),
+            None => return None,
+        };
+
+        let op = match token.value.as_str() {
+            "!" => ConstituentOperator::Not,
+            "~" => ConstituentOperator::BitNeg,
+            _ => return self.recurse_grouping(),
+        };
+
+        self.advance();
+
+        Some(Expr::UnaryExpr {
+            span: token.span,
+            op: Kind::Operator(op),
+            expr: Box::new(self.recurse_unary().unwrap()),
+        })
+    }
+
+    fn recurse_grouping(&mut self) -> Option<Expr> {
+        let token = self.peek()?.clone();
+        match token.value.as_str() {
+            "(" => {
+                self.advance();
+                let expr = self.recurse_expr();
+
+                if !self.check(")") {
+                    panic!("handle error here");
+                }
+
+                self.advance();
+                return expr;
+            }
+            _ => {}
+        };
+
+        return self.recurse_primitive();
+    }
+
+    fn recurse_primitive(&mut self) -> Option<Expr> {
+        let token = match self.peek() {
+            Some(token) => self.generate_ast_primative(token.clone()),
+            None => return None,
+        };
+
+        self.advance();
+        Some(token)
+    }
+
+    fn generate_ast_primative(&self, token: Token) -> Expr {
+        match token.category {
+            Category::Identifier => Expr::Identifier {
+                identifier: token.value,
+                span: token.span,
+            },
+            Category::Literal => Expr::Literal {
+                value: token.value,
+                span: token.span,
+            },
+            _ => Expr::Invalid {
+                token: token.clone(),
+            },
+        }
+    }
+
     #[inline]
     fn peek(&self) -> Option<&Token> {
         self.tokens.front()
@@ -53,11 +175,11 @@ impl Parser {
     fn advance(&mut self) -> Option<Token> {
         self.tokens.pop_front()
     }
-    //
-    // #[inline]
-    // fn check(&self, value: &str) -> bool {
-    //     self.peek().map(|t| t.value == value).unwrap_or(false)
-    // }
+
+    #[inline]
+    fn check(&self, value: &str) -> bool {
+        self.peek().map(|t| t.value == value).unwrap_or(false)
+    }
 }
 
 // use crate::compiler::{

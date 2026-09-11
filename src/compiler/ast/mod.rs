@@ -1,3 +1,3 @@
 pub mod ast;
 
-pub use ast::{generate_ast_primative, Expr, Parameter, Program, Stmt};
+pub use ast::{Expr, Parameter, Program, Stmt};

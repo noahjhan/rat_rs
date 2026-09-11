@@ -1,14 +1,20 @@
+!10 * 11 * ~~12
+
+/*
+
 fn foo(x: int): int {
   io::println("hello")
 
   let y: int = x
   io::println(y)
 
-//  let weird? = 3
+  let weird? = 3
   let fnx: int = 10
 
-//  let z: float = 3.0uf
+  let z: float = 3.0uf
   io::println(z)
 
   ret x
 }
+
+*/
