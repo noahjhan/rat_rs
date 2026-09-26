@@ -30,7 +30,9 @@ pub fn compile(filepath: String, verbose: bool) {
         debug_print_parser(&ast);
     }
 
-    performance_print(source_duration, lexer_duration, parser_duration);
+    if verbose {
+        performance_print(source_duration, lexer_duration, parser_duration);
+    }
 }
 
 fn source(filepath: String) -> Option<RatSource> {

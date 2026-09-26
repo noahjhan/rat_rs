@@ -1,32 +1,22 @@
 # Running a `.rat` Program
 
-## 1. Set filepath
+## 1. Install Rust
 
-In `src/main.rs`, find this line:
+Example:
 
-```rust
-let filepath = String::from("data/compile.rat");
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Replace `"data/compile.rat"` with the path to the `.rat` program you want to run.
+## 2. Write a rat program
 
-## 2. Choose compilation mode
+Use file extension '.rat'. Various rat example programs are written in the `/data` directory.
 
-On the subsequent line there is a function call `compile(filepath, ...)`. The second argument is a debug flag:
-
-- **`compile(filepath, true)`** runs the full compilation pipeline with debug printing. 
-- **`compile(filepath, false)`** only generates the executable.
-
-```rust
-compile(filepath, true);  // verbose: execute and print pipeline stages
-// or
-compile(filepath, false); // quiet: just execute pipeline 
-```
-
-## 3. Build and run
+## 3. Compile the executable
 
 From the project root, run:
 
 ```bash
-cargo run
+cargo run -- file=path_to_your_file verbose welcome
 ```
+With additional arguments 'verbose' for debug output and 'welcome' to say hello to our mascot Ratty! All arguments are optional, the default filepath is `/data/compile.rat`

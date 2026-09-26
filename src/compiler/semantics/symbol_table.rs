@@ -1,3 +1,21 @@
+// pub struct ProgramTable {
+//     functions: Vec<FunctionTable>,
+// }
+//
+// pub struct FunctionTable {
+//     identifier: String,
+//     parameters: Vec<String>,
+// }
+//
+// pub struct Symbol {
+//     identifier: String,
+//     kind: String, // ConstituentType
+// }
+
+// pub struct SymbolTable {
+//     identifier:
+// }
+
 use crate::compiler::{Scope, Symbol};
 
 pub struct SymbolTable {

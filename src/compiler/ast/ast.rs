@@ -1,4 +1,4 @@
-use crate::compiler::{Category, Kind, Span, Token};
+use crate::compiler::{Kind, Span, Token};
 
 #[derive(Debug, Clone)]
 pub struct Program {

@@ -1,4 +1,5 @@
 use rat::compiler::compile;
+use std::env;
 
 fn main() {
     let ascii_ratty = r#"
@@ -43,9 +44,28 @@ fn main() {
                       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  
     "#;
 
-    // println!("{}", ascii_ratty);
-    println!("bonjour le monde!");
+    let args: Vec<String> = env::args().collect();
+    let mut verbose = false;
+    let mut welcome = false;
+    let mut filepath = String::from("data/compile.rat");
 
-    let filepath = String::from("data/compile.rat");
-    compile(filepath, true);
+    for arg in args {
+        if let Some((_, fp)) = arg.split_once("=") {
+            filepath = String::from(fp);
+            continue;
+        }
+
+        match arg.to_lowercase().as_str() {
+            "verbose" => verbose = true,
+            "welcome" => welcome = true,
+            _ => {}
+        }
+    }
+
+    if welcome {
+        println!("{}", ascii_ratty);
+        println!("bonjour le monde!");
+    }
+
+    compile(filepath, verbose);
 }
