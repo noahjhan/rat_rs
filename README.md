@@ -13,7 +13,7 @@ To compile a program, read `doc/instructions.md`.
 Rat contains four function types:
 ### fn
 
-This is the default function in rat. Return values using the keyword ret.
+This is the default function in rat. Return values using the keyword `ret`.
 
 ```
 fn foo(x: int): int {
@@ -23,7 +23,7 @@ fn foo(x: int): int {
 
 ### fn_
 
-This is a rat-tail function, meaning no explicit return value. Since code inside fn_ functions typically interoperate with stateful behavior, avoid passing in mutable references defined outside the function. Use the keyword rev to exit from rat-tails.
+This is a rat-tail function, meaning no explicit return value. Since code inside `fn_` functions typically interoperate with stateful behavior, avoid passing in mutable references defined outside the function. Use the keyword rev to exit from rat-tails.
 
 ```
 fn_ main() {
@@ -34,7 +34,7 @@ fn_ main() {
 
 ### fn?
 
-When a function can return an error, use fn?. Use the keyword ret? to return either a value or the resulting error. 
+When a function can return an error, use `fn?`. Use the keyword `ret?` to return either a value or the resulting error. 
 
 ```
 fn? bar() file? {
@@ -46,7 +46,7 @@ fn? bar() file? {
 
 ### fn\
 
-For anonymous functions, use fn\\. Anonymous functions use either ret, rev, or ret? depending on the return value.
+For anonymous functions, use `fn\\`. Anonymous functions use either `ret`, `rev`, or `ret?` depending on the return value.
 
 ```
 fn baz(): int {
