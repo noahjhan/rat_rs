@@ -46,7 +46,7 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
     let mut verbose = false;
-    let mut welcome = false;
+    let mut bonjour = false;
     let mut filepath = String::from("data/compile.rat");
 
     for arg in args {
@@ -57,12 +57,12 @@ fn main() {
 
         match arg.to_lowercase().as_str() {
             "verbose" => verbose = true,
-            "welcome" => welcome = true,
+            "bonjour" => bonjour = true,
             _ => {}
         }
     }
 
-    if welcome {
+    if bonjour {
         println!("{}", ascii_ratty);
         println!("bonjour le monde!");
     }
