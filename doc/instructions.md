@@ -10,7 +10,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ## 2. Write a rat program
 
-Use file extension `.rat`. Various rat example programs are written in the `/data` directory.
+Use file extension `.rat`. Various example rat programs are written in the `/data` directory.
 
 ```
 fn_ main() {
