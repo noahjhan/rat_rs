@@ -6,11 +6,11 @@ use crate::compiler::{
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 
-/// this file holds the structure associated with lexing source files
-///
-/// TODO: multi-line string literals
+/// This file holds the structure associated with lexing source files
+
 /// TODO: Hex/Octal/Binary integer representations
 
+/// Lexes RatSource files
 pub struct Lexer<'a> {
     source: &'a mut RatSource,
     tokens: VecDeque<Token>,
@@ -26,6 +26,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Produces valid and/or error tokens from a source file until EOF
     pub fn dispatch(&mut self) -> Result<(VecDeque<Token>, Vec<RatError>), RatError> {
         loop {
             match self.advance_token() {
@@ -52,6 +53,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Logic to distingusish between various token types via lookahead
     pub fn advance_token(&mut self) -> Result<Option<Token>, RatError> {
         self.advance_whitespace();
         self.advance_single_line_comment();
@@ -90,6 +92,7 @@ impl<'a> Lexer<'a> {
         self.unexpected_char()
     }
 
+    /// Skips past non-newline whitespace
     fn advance_whitespace(&mut self) {
         self.fold_while((), |_, _, ch| {
             if !ch.is_whitespace() || ch == '\n' {
@@ -100,6 +103,7 @@ impl<'a> Lexer<'a> {
         });
     }
 
+    /// Skips the entire line after a single-line comment lexeme
     fn advance_single_line_comment(&mut self) {
         match self.peek_n(2) {
             Some(s) if s == "//" => {}
@@ -114,6 +118,7 @@ impl<'a> Lexer<'a> {
         });
     }
 
+    /// Skips past nested multi-line comment
     fn advance_multi_line_comment(&mut self) -> Result<(), RatError> {
         match self.peek_n(2) {
             Some(s) if s == "/*" => {}
@@ -149,6 +154,7 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
+    /// Produces token for string literals
     fn advance_string_literal(&mut self) -> Result<Option<Token>, RatError> {
         let (actual, span) = self.spanned_read(|s| s.read());
         #[cfg(debug_assertions)]
@@ -174,6 +180,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Produces token for character literal
     fn advance_character_literal(&mut self) -> Result<Option<Token>, RatError> {
         let (actual, span) = self.spanned_read(|s| s.read());
         #[cfg(debug_assertions)]
@@ -213,6 +220,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Ensures escape sequences are legal
     fn read_escape_sequence(&mut self, context: &ReadContext) -> Result<String, RatError> {
         match self.read() {
             Some(ch @ ('\\' | '\'' | '"' | 'n' | 'r' | 't' | 'b' | '0')) => Ok(String::from(ch)),
@@ -236,6 +244,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Special case for escaped unicode chars
     fn read_unicode_escape(&mut self, mut context: ReadContext) -> Result<String, RatError> {
         let u_idx = context.partial.len() - 1;
         match self.read() {
@@ -300,6 +309,7 @@ impl<'a> Lexer<'a> {
         Ok(context.partial[u_idx..].to_string())
     }
 
+    /// Produces token for numeric literal
     fn advance_numeric_literal(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let mut context = ReadContext::new(start_pos);
@@ -327,6 +337,7 @@ impl<'a> Lexer<'a> {
         Ok(Some(token))
     }
 
+    /// Reads ascii digits and returns result as a lexeme
     fn read_digits(&mut self, context: &ReadContext) -> Result<String, RatError> {
         let mut digits = String::new();
         self.accumulate(&mut digits, |ch| ch.is_ascii_digit());
@@ -337,6 +348,7 @@ impl<'a> Lexer<'a> {
         Ok(digits)
     }
 
+    /// Ensures typed numeric literals are correct
     fn read_numeric_suffix(
         &mut self,
         is_floating_type: bool,
@@ -373,6 +385,7 @@ impl<'a> Lexer<'a> {
         Ok(suffix)
     }
 
+    /// Reads in characters and classifies lexeme as either a keyword or identifier
     fn advance_keyword_or_identifier(&mut self) -> Result<Option<Token>, RatError> {
         let (partial, span) = self.spanned_read(|s| {
             let mut buf = String::new();
@@ -381,15 +394,18 @@ impl<'a> Lexer<'a> {
         });
 
         #[cfg(debug_assertions)]
-        assert!(partial
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_'));
+        assert!(
+            partial
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
+        );
 
         let category = Category::is_any(&partial).unwrap_or(Category::Identifier);
         Ok(Some(Token::new(category, partial, span)))
     }
 
+    /// Reads in characters and classifies lexeme as either an operator or punctuator
     fn advance_operator_or_punctuator(&mut self) -> Result<Option<Token>, RatError> {
         let (result, span) = self.spanned_read(|s| {
             let mut partial = String::new();
@@ -417,6 +433,7 @@ impl<'a> Lexer<'a> {
         Ok(Some(Token::new(category, result, span)))
     }
 
+    /// Handler when advance_token is unable to identify token kind
     fn unexpected_char(&mut self) -> Result<Option<Token>, RatError> {
         let start_pos = self.source.position();
         let ch = self.read().unwrap();
@@ -427,6 +444,7 @@ impl<'a> Lexer<'a> {
         context.error(LexicalError::UnexpectedChar(ch), end_pos)
     }
 
+    /// Debug verification to ensure functions are called with correct values
     fn verify_opening_char(
         &self,
         function_name: &str,
@@ -444,6 +462,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Debug verification to ensure numeric literals match regex specification
     fn verify_numeric_literal(&self, function_name: &str, token: &Token) {
         use std::sync::OnceLock;
         static RE: OnceLock<regex::Regex> = OnceLock::new();
@@ -457,6 +476,7 @@ impl<'a> Lexer<'a> {
         );
     }
 
+    /// Handler for lexical errors with different recovery strategies
     fn advance_lexical_error(&mut self, err: &mut RatError) -> Result<Token, RatError> {
         let recovery = Recovery::from_error(err);
         let partial = &mut err.value;
@@ -491,6 +511,8 @@ impl<'a> Lexer<'a> {
         let token = Token::new(Category::Invalid, err.value.clone(), err.span);
         Ok(token)
     }
+
+    /// Helpers
 
     #[inline]
     fn fold_while<S, F>(&mut self, init: S, mut f: F) -> S

@@ -12,13 +12,13 @@ pub use compile::compile;
 pub use diagnostics::{ErrorKind, LexicalError, ParseError, Position, RatError, Render, Span};
 
 pub use lexer::{
-    Category, ConstituentIdentifier, ConstituentKeyword, ConstituentLiteral, ConstituentOperator,
-    ConstituentPunctuator, ConstituentType, Kind, Lexer, Recovery, Token,
+    Category, IdentifierKind, KeywordKind, Kind, Lexer, LiteralKind, OperatorKind, PunctuatorKind,
+    Recovery, Token, TypeKind,
 };
 
 pub use parser::Parser;
 
 pub use semantics::{Scope, Symbol, SymbolTable};
 
-pub use source::context::ReadContext;
 pub use source::RatSource;
+pub use source::context::ReadContext;

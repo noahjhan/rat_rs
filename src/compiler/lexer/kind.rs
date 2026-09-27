@@ -1,46 +1,22 @@
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
-    Identifier(ConstituentIdentifier),
-    Keyword(ConstituentKeyword),
-    Literal(ConstituentLiteral),
-    Punctuator(ConstituentPunctuator),
-    Operator(ConstituentOperator),
-    Type(ConstituentType),
+    Identifier(IdentifierKind),
+    Keyword(KeywordKind),
+    Literal(LiteralKind),
+    Punctuator(PunctuatorKind),
+    Operator(OperatorKind),
+    Type(TypeKind),
     Invalid,
 }
 
-// impl Kind {
-//     pub fn is_identifier(&self) -> bool {
-//         matches!(self, Kind::Identifier(_))
-//     }
-//     pub fn is_keyword(&self) -> bool {
-//         matches!(self, Kind::Keyword(_))
-//     }
-//     pub fn is_literal(&self) -> bool {
-//         matches!(self, Kind::Literal(_))
-//     }
-//     pub fn is_punctuator(&self) -> bool {
-//         matches!(self, Kind::Punctuator(_))
-//     }
-//     pub fn is_operator(&self) -> bool {
-//         matches!(self, Kind::Operator(_))
-//     }
-//     pub fn is_type(&self) -> bool {
-//         matches!(self, Kind::Type(_))
-//     }
-//     pub fn is_invalid(&self) -> bool {
-//         matches!(self, Kind::Invalid)
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentIdentifier {
+pub enum IdentifierKind {
     Variable,
     Function,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentKeyword {
+pub enum KeywordKind {
     Let,
     LetOptional,
     Function,
@@ -56,7 +32,7 @@ pub enum ConstituentKeyword {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentLiteral {
+pub enum LiteralKind {
     Numeric,
     String,
     Boolean,
@@ -65,7 +41,7 @@ pub enum ConstituentLiteral {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentPunctuator {
+pub enum PunctuatorKind {
     Colon,
     SingleQuote,
     DoubleQuote,
@@ -80,7 +56,7 @@ pub enum ConstituentPunctuator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentOperator {
+pub enum OperatorKind {
     Assign,
     Add,
     Sub,
@@ -109,7 +85,7 @@ pub enum ConstituentOperator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstituentType {
+pub enum TypeKind {
     Int,
     Long,
     Short,

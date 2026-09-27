@@ -1,4 +1,4 @@
-use crate::compiler::{Category, ConstituentOperator, Expr, Kind, Program, RatError, Stmt, Token};
+use crate::compiler::{Category, Expr, Kind, OperatorKind, Program, RatError, Stmt, Token};
 
 use std::collections::VecDeque;
 
@@ -62,8 +62,8 @@ impl Parser {
             };
 
             let op = match token.value.as_str() {
-                "&&" => ConstituentOperator::And,
-                "||" => ConstituentOperator::Or,
+                "&&" => OperatorKind::And,
+                "||" => OperatorKind::Or,
                 _ => break,
             };
 
@@ -92,12 +92,12 @@ impl Parser {
             };
 
             let op = match token.value.as_str() {
-                "==" => ConstituentOperator::Eq,
-                "!=" => ConstituentOperator::Neq,
-                "<" => ConstituentOperator::Lt,
-                ">" => ConstituentOperator::Gt,
-                "<=" => ConstituentOperator::Lte,
-                ">=" => ConstituentOperator::Gte,
+                "==" => OperatorKind::Eq,
+                "!=" => OperatorKind::Neq,
+                "<" => OperatorKind::Lt,
+                ">" => OperatorKind::Gt,
+                "<=" => OperatorKind::Lte,
+                ">=" => OperatorKind::Gte,
                 _ => break,
             };
 
@@ -126,8 +126,8 @@ impl Parser {
             };
 
             let op = match token.value.as_str() {
-                "<<" => ConstituentOperator::Shl,
-                ">>" => ConstituentOperator::Shr,
+                "<<" => OperatorKind::Shl,
+                ">>" => OperatorKind::Shr,
                 _ => break,
             };
 
@@ -156,8 +156,8 @@ impl Parser {
             };
 
             let op = match token.value.as_str() {
-                "+" => ConstituentOperator::Add,
-                "-" => ConstituentOperator::Sub,
+                "+" => OperatorKind::Add,
+                "-" => OperatorKind::Sub,
                 _ => break,
             };
 
@@ -186,9 +186,9 @@ impl Parser {
             };
 
             let op = match token.value.as_str() {
-                "*" => ConstituentOperator::Mul,
-                "/" => ConstituentOperator::Div,
-                "%" => ConstituentOperator::Mod,
+                "*" => OperatorKind::Mul,
+                "/" => OperatorKind::Div,
+                "%" => OperatorKind::Mod,
                 _ => break,
             };
 
@@ -214,8 +214,8 @@ impl Parser {
         };
 
         let op = match token.value.as_str() {
-            "!" => ConstituentOperator::Not,
-            "~" => ConstituentOperator::BitNeg,
+            "!" => OperatorKind::Not,
+            "~" => OperatorKind::BitNeg,
             _ => return self.recurse_grouping(),
         };
 

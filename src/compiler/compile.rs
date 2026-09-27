@@ -2,6 +2,7 @@ use crate::compiler::{Lexer, Parser, Program, RatError, RatSource, Render, Token
 use std::collections::VecDeque;
 use std::time;
 
+/// Compiler stages composition
 pub fn compile(filepath: String, verbose: bool) {
     let mut now = time::Instant::now();
     let mut source = match source(filepath) {
@@ -35,6 +36,7 @@ pub fn compile(filepath: String, verbose: bool) {
     }
 }
 
+/// Create a readable RatSource from a .rat file
 fn source(filepath: String) -> Option<RatSource> {
     match RatSource::init(filepath) {
         Ok(source) => Some(source),
@@ -47,6 +49,7 @@ fn source(filepath: String) -> Option<RatSource> {
     }
 }
 
+/// Create a lexer and call dispatch to return the tokenized source
 fn lexer(source: &mut RatSource) -> Option<(VecDeque<Token>, Vec<RatError>)> {
     let mut lexer = Lexer::init(source);
     match lexer.dispatch() {
@@ -59,6 +62,7 @@ fn lexer(source: &mut RatSource) -> Option<(VecDeque<Token>, Vec<RatError>)> {
     }
 }
 
+/// Returns an AST from the parsed token deque
 fn parser(tokens: VecDeque<Token>) -> Option<Program> {
     let mut parser = Parser::init(tokens);
     match parser.dispatch() {
@@ -67,6 +71,7 @@ fn parser(tokens: VecDeque<Token>) -> Option<Program> {
     }
 }
 
+/// Prints generated token deque and lexical errors after lexing
 fn debug_print_lexer(
     source: &mut RatSource,
     tokens: &VecDeque<Token>,
@@ -86,10 +91,12 @@ fn debug_print_lexer(
     }
 }
 
+/// Prints generated AST after parsing
 fn debug_print_parser(ast: &Program) {
     println!("{:#?}\n", ast);
 }
 
+/// Used to compare pipeline stage performance
 fn performance_print(
     source_duration: time::Duration,
     lexer_duration: time::Duration,

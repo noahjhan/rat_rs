@@ -6,8 +6,7 @@ pub mod token;
 
 pub use category::Category;
 pub use kind::{
-    ConstituentIdentifier, ConstituentKeyword, ConstituentLiteral, ConstituentOperator,
-    ConstituentPunctuator, ConstituentType, Kind,
+    IdentifierKind, KeywordKind, Kind, LiteralKind, OperatorKind, PunctuatorKind, TypeKind,
 };
 pub use lexer::Lexer;
 pub use recovery::Recovery;
