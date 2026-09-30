@@ -21,7 +21,7 @@ pub enum KeywordKind {
     LetOptional,
     Function,
     FunctionVoid,
-    FunctionOptional,
+    FunctionError,
     FunctionLambda,
     Return,
     ReturnVoid,

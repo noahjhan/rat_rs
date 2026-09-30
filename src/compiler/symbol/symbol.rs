@@ -1,13 +1,17 @@
-use crate::compiler::{Kind, Token};
+use crate::compiler::{Kind, Span};
 
-#[derive(Clone)]
 pub struct Symbol {
-    pub token: Token,
+    pub identifier: String,
+    pub span: Span, // span of decl
     pub kind: Kind,
 }
 
 impl Symbol {
-    pub fn new(token: Token, kind: Kind) -> Self {
-        Symbol { token, kind }
+    pub fn new(identifier: String, span: Span, kind: Kind) -> Self {
+        Symbol {
+            identifier,
+            span,
+            kind,
+        }
     }
 }

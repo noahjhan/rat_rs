@@ -1,10 +1,13 @@
-use crate::compiler::{Category, Expr, Kind, OperatorKind, Program, RatError, Stmt, Token};
+use crate::compiler::{
+    Category, Expr, Kind, OperatorKind, Program, RatError, Stmt, SymbolTable, Token,
+};
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 pub struct Parser {
     tokens: VecDeque<Token>,
     program: Program,
+    symbol_table: SymbolTable,
 }
 
 impl Parser {
@@ -13,6 +16,10 @@ impl Parser {
             tokens,
             program: Program {
                 statements: Vec::new(),
+            },
+            symbol_table: SymbolTable::ProgramTable {
+                functions: HashMap::new(),
+                globals: HashMap::new(),
             },
         }
     }

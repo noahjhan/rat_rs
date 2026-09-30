@@ -11,7 +11,9 @@ pub use compile::compile;
 
 pub use ast::{Expr, Parameter, Program, Stmt};
 
-pub use diagnostics::{ErrorKind, LexicalError, ParseError, Position, RatError, Render, Span};
+pub use diagnostics::{
+    ErrorKind, LexicalError, ParseError, Position, RatError, Render, SemanticError, Span,
+};
 
 pub use lexer::{Lexer, Recovery};
 

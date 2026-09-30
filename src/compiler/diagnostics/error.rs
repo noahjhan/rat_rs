@@ -7,6 +7,7 @@ pub enum ErrorKind {
     Source,
     Lexical(LexicalError),
     Parse(ParseError),
+    Semantic(SemanticError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +53,14 @@ impl RatError {
         }
     }
 
+    pub fn semantic(err: SemanticError, value: impl Into<String>, span: Span) -> Self {
+        Self {
+            kind: ErrorKind::Semantic(err),
+            value: value.into(),
+            span,
+        }
+    }
+
     pub fn is_fatal(&self) -> bool {
         matches!(self.kind, ErrorKind::Io | ErrorKind::Source)
     }
@@ -71,6 +80,9 @@ impl std::fmt::Display for RatError {
             }
             ErrorKind::Parse(err) => {
                 write!(f, "parse error: {}", err)
+            }
+            ErrorKind::Semantic(err) => {
+                write!(f, "semantic error: {}", err)
             }
         }
     }
@@ -193,6 +205,41 @@ impl std::fmt::Display for ParseError {
             }
             Self::ExpectedGotEof { expected } => {
                 write!(f, "expected '{}', got EOF", expected)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SemanticError {
+    ParameterRedeclaration,
+    FunctionRedeclaration,
+    GlobalRedeclaration,
+    UnknownFunction,
+    UnknownIdentifier,
+    IdentifierRedeclaration,
+}
+
+impl std::fmt::Display for SemanticError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParameterRedeclaration => {
+                write!(f, "parameter redeclaration")
+            }
+            Self::FunctionRedeclaration => {
+                write!(f, "function redeclaration")
+            }
+            Self::GlobalRedeclaration => {
+                write!(f, "global redeclaration")
+            }
+            Self::UnknownFunction => {
+                write!(f, "unknown function")
+            }
+            Self::UnknownIdentifier => {
+                write!(f, "unknown identifier")
+            }
+            Self::IdentifierRedeclaration => {
+                write!(f, "identifier redeclaration")
             }
         }
     }

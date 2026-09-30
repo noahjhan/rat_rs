@@ -14,15 +14,15 @@ pub enum Stmt {
     },
 
     FunctionDecl {
-        identifier: Token,
+        identifier: String,
+        span: Span,
+        /// Function, FunctionVoid, FunctionError, FunctionLambda
         kind: Kind,
         parameters: Vec<Parameter>,
-        return_type: Token,
         body: Program,
     },
 
     ConditionalStatement {
-        keyword: Token,
         kind: Kind,
         expr: Expr,
         next: Box<Stmt>,
@@ -40,8 +40,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
-    pub identifier: Token,
-    pub param_type: Token,
+    pub identifier: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

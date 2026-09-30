@@ -1,65 +1,95 @@
-// pub struct ProgramTable {
-//     functions: Vec<FunctionTable>,
-// }
-//
-// pub struct FunctionTable {
-//     identifier: String,
-//     parameters: Vec<String>,
-// }
-//
-// pub struct Symbol {
-//     identifier: String,
-//     kind: String, // ConstituentType
-// }
+use crate::compiler::{RatError, SemanticError, Symbol};
+use std::collections::HashMap;
 
-// pub struct SymbolTable {
-//     identifier:
-// }
+pub enum SymbolTable {
+    ProgramTable {
+        functions: HashMap<String, SymbolTable>,
+        globals: HashMap<String, Symbol>,
+    },
 
-use crate::compiler::{Scope, Symbol};
+    FunctionTable {
+        parameters: HashMap<String, Symbol>,
+        body: Box<SymbolTable>,
+    },
 
-pub struct SymbolTable {
-    stack: Vec<Scope>,
+    Scope {
+        children: Vec<SymbolTable>,
+        symbols: HashMap<String, Symbol>,
+    },
 }
 
 impl SymbolTable {
-    pub fn init() -> Self {
-        let scope = Scope::init();
-        let vec = Vec::new();
-
-        let mut symbol_table = SymbolTable { stack: vec };
-        symbol_table.stack.push(scope);
-
-        symbol_table
-    }
-
-    pub fn enter_scope(&mut self) {
-        self.stack.push(Scope::init());
-    }
-
-    pub fn exit_scope(&mut self) {
-        self.stack.pop();
-
-        #[cfg(debug_assertions)]
-        assert!(!self.stack.is_empty(), "cannot exit global scope")
-    }
-
-    pub fn contains(&self, key: &str) -> bool {
-        self.stack.iter().rev().any(|scope| scope.contains(key))
-    }
-
-    pub fn lookup(&self, key: &str) -> Option<&Symbol> {
-        self.stack.iter().rev().find_map(|scope| scope.lookup(key))
-    }
-
-    pub fn insert_symbol(&mut self, symbol: Symbol) {
-        match self.stack.last_mut() {
-            Some(scope) => {
-                scope.insert_symbol(symbol);
-            }
-            None => {
-                panic!("symbol table must always contain global scope")
-            }
+    pub fn new() -> Self {
+        SymbolTable::ProgramTable {
+            functions: HashMap::new(),
+            globals: HashMap::new(),
         }
+    }
+
+    pub fn insert_global(&mut self, symbol: Symbol) -> Result<(), RatError> {
+        let SymbolTable::ProgramTable { globals, .. } = self else {
+            panic!("insert_global called on non-program symbol table");
+        };
+
+        if globals.contains_key(&symbol.identifier) {
+            return Err(RatError::semantic(
+                SemanticError::GlobalRedeclaration,
+                symbol.identifier,
+                symbol.span,
+            ));
+        }
+
+        globals.insert(symbol.identifier.clone(), symbol);
+
+        Ok(())
+    }
+
+    pub fn insert_function_declaration(&mut self, symbol: Symbol) -> Result<(), RatError> {
+        let SymbolTable::ProgramTable { functions, .. } = self else {
+            panic!("insert_function_declaration called on non-program symbol table");
+        };
+
+        if functions.contains_key(&symbol.identifier) {
+            return Err(RatError::semantic(
+                SemanticError::FunctionRedeclaration,
+                symbol.identifier,
+                symbol.span,
+            ));
+        }
+
+        let function = SymbolTable::FunctionTable {
+            parameters: HashMap::new(),
+            body: Box::new(SymbolTable::Scope {
+                children: Vec::new(),
+                symbols: HashMap::new(),
+            }),
+        };
+
+        functions.insert(symbol.identifier, function);
+
+        Ok(())
+    }
+
+    pub fn add_parameter(&mut self, fn_identifier: String, symbol: Symbol) -> Result<(), RatError> {
+        let SymbolTable::ProgramTable { functions, .. } = self else {
+            panic!("add_parameter called on non-program symbol table");
+        };
+
+        let Some(SymbolTable::FunctionTable { parameters, .. }) = functions.get_mut(&fn_identifier)
+        else {
+            panic!("invalid function table instantiation")
+        };
+
+        if parameters.contains_key(&symbol.identifier) {
+            return Err(RatError::semantic(
+                SemanticError::ParameterRedeclaration,
+                symbol.identifier,
+                symbol.span,
+            ));
+        }
+
+        parameters.insert(symbol.identifier.clone(), symbol);
+
+        Ok(())
     }
 }
