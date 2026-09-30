@@ -24,7 +24,7 @@ pub use token::{
 
 pub use parser::Parser;
 
-pub use symbol::{Scope, Symbol, SymbolTable};
+pub use symbol::{Symbol, SymbolTable};
 
 pub use source::RatSource;
 
