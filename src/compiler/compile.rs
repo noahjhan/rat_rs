@@ -12,10 +12,7 @@ pub fn compile(filepath: String, verbose: bool) {
     let source_duration = now.elapsed();
 
     now = time::Instant::now();
-    let (tokens, errors) = match lexer(&mut source) {
-        Some(result) => result,
-        None => return,
-    };
+    let (tokens, errors) = lexer(&mut source);
     let lexer_duration = now.elapsed();
 
     debug_print_lexer(&mut source, &tokens, errors, verbose);
@@ -38,28 +35,14 @@ pub fn compile(filepath: String, verbose: bool) {
 
 /// Create a readable RatSource from a .rat file
 fn source(filepath: String) -> Option<RatSource> {
-    match RatSource::init(filepath) {
-        Ok(source) => Some(source),
-        Err(err) => {
-            let mut empty = RatSource::empty();
-            let mut render = Render::init(&mut empty);
-            render.print(err);
-            None
-        }
-    }
+    RatSource::init(filepath)
+        .map_err(|err| eprintln!("error: {err}"))
+        .ok()
 }
 
 /// Create a lexer and call dispatch to return the tokenized source
-fn lexer(source: &mut RatSource) -> Option<(VecDeque<Token>, Vec<RatError>)> {
-    let mut lexer = Lexer::init(source);
-    match lexer.dispatch() {
-        Err(err) => {
-            let mut render = Render::init(source);
-            render.print(err);
-            None
-        }
-        Ok((tokens, errors)) => Some((tokens, errors)),
-    }
+fn lexer(source: &mut RatSource) -> (VecDeque<Token>, Vec<RatError>) {
+    Lexer::init(source).dispatch()
 }
 
 /// Returns an AST from the parsed token deque

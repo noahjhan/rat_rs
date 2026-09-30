@@ -1,4 +1,4 @@
-use crate::compiler::{Category, ErrorKind, LexicalError, RatError};
+use crate::compiler::{Category, LexicalError};
 
 pub enum Recovery {
     StopAtNewline,
@@ -9,40 +9,25 @@ pub enum Recovery {
 }
 
 impl Recovery {
-    pub fn from_error(err: &RatError) -> Self {
-        let opener = err
-            .value
-            .chars()
-            .next()
-            .filter(|ch| matches!(ch, '\'' | '"'));
-
-        match &err.kind {
-            ErrorKind::Lexical(LexicalError::UnterminatedString)
-            | ErrorKind::Lexical(LexicalError::UnterminatedCharLiteral)
-            | ErrorKind::Lexical(LexicalError::UnterminatedMultiLineComment) => Self::StopAtNewline,
-
-            ErrorKind::Lexical(LexicalError::UnterminatedEscapeSequence)
-            | ErrorKind::Lexical(LexicalError::UnterminatedUnicodeEscape)
-            | ErrorKind::Lexical(LexicalError::InvalidEscapeSequence(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeOpener(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeEscapeDigit(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeDigitCount(_))
-            | ErrorKind::Lexical(LexicalError::InvalidUnicodeCodepoint(_))
-            | ErrorKind::Lexical(LexicalError::SurrogateCodepoint(_)) => match opener {
+    pub fn from_error(kind: &LexicalError, opener: Option<char>) -> Self {
+        use LexicalError::*;
+        match kind {
+            UnterminatedString | UnterminatedCharLiteral | UnterminatedMultiLineComment => {
+                Self::StopAtNewline
+            }
+            UnterminatedEscapeSequence
+            | UnterminatedUnicodeEscape
+            | InvalidEscapeSequence(_)
+            | InvalidUnicodeEscapeOpener(_)
+            | InvalidUnicodeEscapeDigit(_)
+            | InvalidUnicodeDigitCount(_)
+            | InvalidUnicodeCodepoint(_)
+            | SurrogateCodepoint(_) => match opener {
                 Some(delim) => Self::StopAtDelimiterOrNewline(delim),
                 None => Self::StopAtAnyDelimiter,
             },
-
-            ErrorKind::Lexical(LexicalError::EmptyCharLiteral)
-            | ErrorKind::Lexical(LexicalError::MultipleCharsInLiteral)
-            | ErrorKind::Lexical(LexicalError::UnexpectedChar(_)) => Self::StopImmediately,
-
-            ErrorKind::Lexical(LexicalError::UnexpectedCharAfterNumeric(_))
-            | ErrorKind::Lexical(LexicalError::NoDigitsInNumericLiteral) => {
-                Self::StopAtWordBoundary
-            }
-
-            _ => panic!("unexpected ErrorKind in Recovery::from_error()"),
+            EmptyCharLiteral | MultipleCharsInLiteral | UnexpectedChar(_) => Self::StopImmediately,
+            UnexpectedCharAfterNumeric(_) | NoDigitsInNumericLiteral => Self::StopAtWordBoundary,
         }
     }
 

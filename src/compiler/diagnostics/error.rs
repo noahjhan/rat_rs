@@ -1,246 +1,112 @@
-use crate::compiler::{Position, Span};
+use crate::compiler::Span;
 use std::io;
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorKind {
-    Io,
-    Source,
-    Lexical(LexicalError),
-    Parse(ParseError),
-    Semantic(SemanticError),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("{kind}")]
 pub struct RatError {
     pub kind: ErrorKind,
-    pub value: String,
     pub span: Span,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ErrorKind {
+    #[error("could not read '{path}': {kind}")]
+    Io { path: String, kind: io::ErrorKind },
+
+    #[error("lexical error: {0}")]
+    Lexical(#[from] LexicalError),
+
+    #[error("parse error: {0}")]
+    Parse(#[from] ParseError),
+
+    #[error("semantic error: {0}")]
+    Semantic(#[from] SemanticError),
+}
+
 impl RatError {
-    pub fn io(_err: io::Error, span: Span) -> Self {
+    pub fn new(kind: impl Into<ErrorKind>, span: Span) -> Self {
         Self {
-            kind: ErrorKind::Io,
-            value: String::new(),
+            kind: kind.into(),
             span,
         }
     }
 
-    pub fn source(message: impl Into<String>, value: impl Into<String>, span: Span) -> Self {
-        let message = message.into();
-        let value = value.into();
-
-        Self {
-            kind: ErrorKind::Source,
-            value: format!("{message}\n{value}"),
-            span,
-        }
-    }
-
-    pub fn lexical(err: LexicalError, value: impl Into<String>, span: Span) -> Self {
-        Self {
-            kind: ErrorKind::Lexical(err),
-            value: value.into(),
-            span,
-        }
-    }
-
-    pub fn parse(err: ParseError, value: impl Into<String>, span: Span) -> Self {
-        Self {
-            kind: ErrorKind::Parse(err),
-            value: value.into(),
-            span,
-        }
-    }
-
-    pub fn semantic(err: SemanticError, value: impl Into<String>, span: Span) -> Self {
-        Self {
-            kind: ErrorKind::Semantic(err),
-            value: value.into(),
-            span,
-        }
+    pub fn io(path: impl Into<String>, err: &io::Error) -> Self {
+        Self::new(
+            ErrorKind::Io {
+                path: path.into(),
+                kind: err.kind(),
+            },
+            Span::new(),
+        )
     }
 
     pub fn is_fatal(&self) -> bool {
-        matches!(self.kind, ErrorKind::Io | ErrorKind::Source)
+        matches!(self.kind, ErrorKind::Io { .. })
     }
 }
 
-impl std::fmt::Display for RatError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            ErrorKind::Io => {
-                write!(f, "io error")
-            }
-            ErrorKind::Source => {
-                write!(f, "source error")
-            }
-            ErrorKind::Lexical(err) => {
-                write!(f, "lexical error: {}", err)
-            }
-            ErrorKind::Parse(err) => {
-                write!(f, "parse error: {}", err)
-            }
-            ErrorKind::Semantic(err) => {
-                write!(f, "semantic error: {}", err)
-            }
-        }
-    }
-}
-
-impl std::error::Error for RatError {}
-
-impl From<io::Error> for RatError {
-    fn from(err: io::Error) -> Self {
-        let zero = Position {
-            line: 0,
-            col: 0,
-            offset: 0,
-        };
-
-        let span = Span {
-            start_pos: zero,
-            end_pos: zero,
-        };
-
-        Self::io(err, span)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LexicalError {
+    #[error("unterminated string literal")]
     UnterminatedString,
+    #[error("unterminated character literal")]
     UnterminatedCharLiteral,
+    #[error("unterminated escape sequence")]
     UnterminatedEscapeSequence,
+    #[error("unterminated unicode escape")]
     UnterminatedUnicodeEscape,
+    #[error("empty character literal")]
     EmptyCharLiteral,
+    #[error("character literal should only contain one character")]
     MultipleCharsInLiteral,
+    #[error("expected ascii digits in numeric literal")]
     NoDigitsInNumericLiteral,
+    #[error("expected closing '*/' in multi-line comment")]
     UnterminatedMultiLineComment,
+    #[error("invalid escape sequence '\\{0}'")]
     InvalidEscapeSequence(char),
+    #[error("expected '{{' after '\\u' in unicode escape, got '{0}'")]
     InvalidUnicodeEscapeOpener(char),
+    #[error("expected hex digit in unicode escape, got '{0}'")]
     InvalidUnicodeEscapeDigit(char),
+    #[error("unicode escape must include between 1 and 6 digits, got {0}")]
     InvalidUnicodeDigitCount(usize),
+    #[error("U+{0:06X} is not a valid unicode codepoint, max is U+10FFFF")]
     InvalidUnicodeCodepoint(u32),
+    #[error(
+        "U+{0:04X} is a surrogate codepoint and cannot be used directly, \
+         surrogates are reserved for internal UTF-16 encoding"
+    )]
     SurrogateCodepoint(u32),
+    #[error("unexpected character '{0}'")]
     UnexpectedChar(char),
+    #[error("unexpected character '{0}' after numeric literal")]
     UnexpectedCharAfterNumeric(char),
 }
 
-impl std::fmt::Display for LexicalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnterminatedString => {
-                write!(f, "unterminated string literal")
-            }
-            Self::UnterminatedCharLiteral => {
-                write!(f, "unterminated character literal")
-            }
-            Self::UnterminatedEscapeSequence => {
-                write!(f, "unterminated escape sequence")
-            }
-            Self::UnterminatedUnicodeEscape => {
-                write!(f, "unterminated unicode escape")
-            }
-            Self::EmptyCharLiteral => {
-                write!(f, "empty character literal")
-            }
-            Self::MultipleCharsInLiteral => {
-                write!(f, "character literal should only contain one character")
-            }
-            Self::NoDigitsInNumericLiteral => {
-                write!(f, "expected ascii digits in numeric literal")
-            }
-            Self::UnterminatedMultiLineComment => {
-                write!(f, "expected closing '*/' in mutli-line comment")
-            }
-            Self::InvalidEscapeSequence(ch) => {
-                write!(f, "invalid escape sequence '\\{ch}'")
-            }
-            Self::InvalidUnicodeEscapeOpener(ch) => {
-                write!(f, "expected '{{' after '\\u' in unicode escape, got '{ch}'")
-            }
-            Self::InvalidUnicodeEscapeDigit(ch) => {
-                write!(f, "expected hex digit in unicode escape, got '{ch}'")
-            }
-            Self::InvalidUnicodeDigitCount(n) => {
-                write!(
-                    f,
-                    "unicode escape must include between 1 and 6 digits, got {n}"
-                )
-            }
-            Self::InvalidUnicodeCodepoint(cp) => {
-                write!(
-                    f,
-                    "U+{cp:06X} is not a valid unicode codepoint, max is U+10FFFF"
-                )
-            }
-            Self::SurrogateCodepoint(cp) => {
-                write!(
-                    f,
-                    "U+{cp:04X} is a surrogate codepoint and cannot be used directly, surrogates are reserved for internal UTF-16 encoding"
-                )
-            }
-            Self::UnexpectedChar(ch) => {
-                write!(f, "unexpected character '{ch}'")
-            }
-            Self::UnexpectedCharAfterNumeric(ch) => {
-                write!(f, "unexpected character '{ch}' after numeric literal")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ParseError {
-    ExpectedGot { expected: String, actual: String },
-    ExpectedGotEof { expected: String },
+    #[error("expected '{expected}', got {}", .found.as_deref().unwrap_or("EOF"))]
+    Expected {
+        expected: String,
+        found: Option<String>,
+    },
 }
 
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ExpectedGot { expected, actual } => {
-                write!(f, "expected '{}', got {}", expected, actual)
-            }
-            Self::ExpectedGotEof { expected } => {
-                write!(f, "expected '{}', got EOF", expected)
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SemanticError {
-    ParameterRedeclaration,
-    FunctionRedeclaration,
-    GlobalRedeclaration,
-    UnknownFunction,
-    UnknownIdentifier,
-    IdentifierRedeclaration,
-}
-
-impl std::fmt::Display for SemanticError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ParameterRedeclaration => {
-                write!(f, "parameter redeclaration")
-            }
-            Self::FunctionRedeclaration => {
-                write!(f, "function redeclaration")
-            }
-            Self::GlobalRedeclaration => {
-                write!(f, "global redeclaration")
-            }
-            Self::UnknownFunction => {
-                write!(f, "unknown function")
-            }
-            Self::UnknownIdentifier => {
-                write!(f, "unknown identifier")
-            }
-            Self::IdentifierRedeclaration => {
-                write!(f, "identifier redeclaration")
-            }
-        }
-    }
+    #[error("parameter '{0}' is already declared")]
+    ParameterRedeclaration(String),
+    #[error("function '{0}' is already declared")]
+    FunctionRedeclaration(String),
+    #[error("global '{0}' is already declared")]
+    GlobalRedeclaration(String),
+    #[error("unknown function '{0}'")]
+    UnknownFunction(String),
+    #[error("unknown identifier '{0}'")]
+    UnknownIdentifier(String),
+    #[error("identifier '{0}' is already declared")]
+    IdentifierRedeclaration(String),
 }

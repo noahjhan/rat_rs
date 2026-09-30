@@ -1,5 +1,9 @@
 use crate::compiler::{RatError, SemanticError, Symbol};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static GLOBAL_ID: AtomicU64 = AtomicU64::new(0);
 
 pub enum SymbolTable {
     ProgramTable {
@@ -13,7 +17,9 @@ pub enum SymbolTable {
     },
 
     Scope {
-        children: Vec<SymbolTable>,
+        id: u64,
+        parent: Option<u64>,
+        children: HashMap<u64, SymbolTable>,
         symbols: HashMap<String, Symbol>,
     },
 }
@@ -31,17 +37,16 @@ impl SymbolTable {
             panic!("insert_global called on non-program symbol table");
         };
 
-        if globals.contains_key(&symbol.identifier) {
-            return Err(RatError::semantic(
-                SemanticError::GlobalRedeclaration,
-                symbol.identifier,
+        match globals.entry(symbol.identifier.clone()) {
+            Entry::Occupied(_) => Err(RatError::new(
+                SemanticError::GlobalRedeclaration(symbol.identifier),
                 symbol.span,
-            ));
+            )),
+            Entry::Vacant(slot) => {
+                slot.insert(symbol);
+                Ok(())
+            }
         }
-
-        globals.insert(symbol.identifier.clone(), symbol);
-
-        Ok(())
     }
 
     pub fn insert_function_declaration(&mut self, symbol: Symbol) -> Result<(), RatError> {
@@ -49,25 +54,24 @@ impl SymbolTable {
             panic!("insert_function_declaration called on non-program symbol table");
         };
 
-        if functions.contains_key(&symbol.identifier) {
-            return Err(RatError::semantic(
-                SemanticError::FunctionRedeclaration,
-                symbol.identifier,
+        match functions.entry(symbol.identifier.clone()) {
+            Entry::Occupied(_) => Err(RatError::new(
+                SemanticError::FunctionRedeclaration(symbol.identifier),
                 symbol.span,
-            ));
+            )),
+            Entry::Vacant(slot) => {
+                slot.insert(SymbolTable::FunctionTable {
+                    parameters: HashMap::new(),
+                    body: Box::new(SymbolTable::Scope {
+                        parent: None,
+                        id: get_next_id(),
+                        children: HashMap::new(),
+                        symbols: HashMap::new(),
+                    }),
+                });
+                Ok(())
+            }
         }
-
-        let function = SymbolTable::FunctionTable {
-            parameters: HashMap::new(),
-            body: Box::new(SymbolTable::Scope {
-                children: Vec::new(),
-                symbols: HashMap::new(),
-            }),
-        };
-
-        functions.insert(symbol.identifier, function);
-
-        Ok(())
     }
 
     pub fn add_parameter(&mut self, fn_identifier: String, symbol: Symbol) -> Result<(), RatError> {
@@ -80,16 +84,21 @@ impl SymbolTable {
             panic!("invalid function table instantiation")
         };
 
-        if parameters.contains_key(&symbol.identifier) {
-            return Err(RatError::semantic(
-                SemanticError::ParameterRedeclaration,
-                symbol.identifier,
+        match parameters.entry(symbol.identifier.clone()) {
+            Entry::Occupied(_) => Err(RatError::new(
+                SemanticError::ParameterRedeclaration(symbol.identifier),
                 symbol.span,
-            ));
+            )),
+            Entry::Vacant(slot) => {
+                slot.insert(symbol);
+                Ok(())
+            }
         }
-
-        parameters.insert(symbol.identifier.clone(), symbol);
-
-        Ok(())
     }
+
+    pub fn enter_scope(&mut self) {}
+}
+
+pub fn get_next_id() -> u64 {
+    GLOBAL_ID.fetch_add(1, Ordering::Relaxed)
 }

@@ -31,27 +31,7 @@ impl ReadContext {
     }
 
     #[inline]
-    pub fn error<T>(&self, kind: LexicalError, end_pos: Position) -> Result<T, RatError> {
-        Err(RatError::lexical(
-            kind,
-            self.partial.clone(),
-            Span::set(self.start_pos, end_pos),
-        ))
-    }
-
-    #[inline]
-    pub fn error_with_suffix<T>(
-        &self,
-        kind: LexicalError,
-        suffix: impl Into<String>,
-        end_pos: Position,
-    ) -> Result<T, RatError> {
-        let mut value = self.partial.clone();
-        value.push_str(&suffix.into());
-        Err(RatError::lexical(
-            kind,
-            value,
-            Span::set(self.start_pos, end_pos),
-        ))
+    pub fn error(&self, kind: LexicalError, end_pos: Position) -> RatError {
+        RatError::new(kind, Span::set(self.start_pos, end_pos))
     }
 }

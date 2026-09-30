@@ -27,7 +27,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Produces valid and/or error tokens from a source file until EOF
-    pub fn dispatch(&mut self) -> Result<(VecDeque<Token>, Vec<RatError>), RatError> {
+    pub fn dispatch(&mut self) -> (VecDeque<Token>, Vec<RatError>) {
         loop {
             match self.advance_token() {
                 Ok(Some(token))
@@ -37,18 +37,18 @@ impl<'a> Lexer<'a> {
                     continue;
                 }
                 Ok(Some(token)) => {
-                    self.tokens.push_back(token.clone());
-                }
-                Err(mut err) if matches!(err.kind, ErrorKind::Lexical(_)) => {
-                    let token = self.advance_lexical_error(&mut err)?;
                     self.tokens.push_back(token);
                 }
                 Err(err) => {
-                    self.tokens.clear();
-                    self.errors.clear();
-                    return Err(err);
+                    let token = self.advance_lexical_error(err);
+                    self.tokens.push_back(token);
                 }
-                Ok(None) => return Ok((self.tokens.clone(), self.errors.clone())),
+                Ok(None) => {
+                    return (
+                        std::mem::take(&mut self.tokens),
+                        std::mem::take(&mut self.errors),
+                    );
+                }
             }
         }
     }
@@ -193,7 +193,7 @@ impl<'a> Lexer<'a> {
             Some('\'') => {
                 self.consume_into(&mut context.partial);
                 let end_pos = self.source.position();
-                return context.error(LexicalError::EmptyCharLiteral, end_pos);
+                return Err(context.error(LexicalError::EmptyCharLiteral, end_pos));
             }
             Some('\\') => {
                 self.consume_into(&mut context.partial);
@@ -215,7 +215,7 @@ impl<'a> Lexer<'a> {
             _ => {
                 let end_pos = self.source.position();
                 self.consume_into(&mut context.partial);
-                context.error(LexicalError::MultipleCharsInLiteral, end_pos)
+                Err(context.error(LexicalError::MultipleCharsInLiteral, end_pos))
             }
         }
     }
@@ -231,15 +231,11 @@ impl<'a> Lexer<'a> {
             }
             Some(ch) => {
                 let end_pos = self.source.position();
-                context.error_with_suffix(
-                    LexicalError::InvalidEscapeSequence(ch),
-                    String::from(ch),
-                    end_pos,
-                )
+                Err(context.error(LexicalError::InvalidEscapeSequence(ch), end_pos))
             }
             None => {
                 let end_pos = self.source.position();
-                context.error(LexicalError::UnterminatedEscapeSequence, end_pos)
+                Err(context.error(LexicalError::UnterminatedEscapeSequence, end_pos))
             }
         }
     }
@@ -251,15 +247,11 @@ impl<'a> Lexer<'a> {
             Some('{') => context.push('{'),
             Some(ch) => {
                 let end_pos = self.source.position();
-                return context.error_with_suffix(
-                    LexicalError::InvalidUnicodeEscapeOpener(ch),
-                    String::from(ch),
-                    end_pos,
-                );
+                return Err(context.error(LexicalError::InvalidUnicodeEscapeOpener(ch), end_pos));
             }
             None => {
                 let end_pos = self.source.position();
-                return context.error(LexicalError::UnterminatedUnicodeEscape, end_pos);
+                return Err(context.error(LexicalError::UnterminatedUnicodeEscape, end_pos));
             }
         }
 
@@ -275,15 +267,14 @@ impl<'a> Lexer<'a> {
                     context.push(ch);
                 }
                 Some(ch) => {
-                    return context.error_with_suffix(
+                    return Err(context.error(
                         LexicalError::InvalidUnicodeEscapeDigit(ch),
-                        String::from(ch),
                         pre_read_end_pos,
-                    );
+                    ));
                 }
                 None => {
                     let end_pos = self.source.position();
-                    return context.error(LexicalError::UnterminatedUnicodeEscape, end_pos);
+                    return Err(context.error(LexicalError::UnterminatedUnicodeEscape, end_pos));
                 }
             }
         }
@@ -293,17 +284,17 @@ impl<'a> Lexer<'a> {
         let hex = &context.partial[hex_start..hex_end];
         if hex.is_empty() || hex.len() > 6 {
             let end_pos = self.source.position();
-            return context.error(LexicalError::InvalidUnicodeDigitCount(hex.len()), end_pos);
+            return Err(context.error(LexicalError::InvalidUnicodeDigitCount(hex.len()), end_pos));
         }
 
         let codepoint = u32::from_str_radix(hex, 16).unwrap();
         let end_pos = self.source.position();
         if codepoint > 0x10_FFFF {
-            return context.error(LexicalError::InvalidUnicodeCodepoint(codepoint), end_pos);
+            return Err(context.error(LexicalError::InvalidUnicodeCodepoint(codepoint), end_pos));
         }
 
         if (0xD800..=0xDFFF).contains(&codepoint) {
-            return context.error(LexicalError::SurrogateCodepoint(codepoint), end_pos);
+            return Err(context.error(LexicalError::SurrogateCodepoint(codepoint), end_pos));
         }
 
         Ok(context.partial[u_idx..].to_string())
@@ -343,7 +334,7 @@ impl<'a> Lexer<'a> {
         self.accumulate(&mut digits, |ch| ch.is_ascii_digit());
         if digits.is_empty() {
             let end_pos = self.source.position();
-            return context.error(LexicalError::NoDigitsInNumericLiteral, end_pos);
+            return Err(context.error(LexicalError::NoDigitsInNumericLiteral, end_pos));
         }
         Ok(digits)
     }
@@ -373,11 +364,7 @@ impl<'a> Lexer<'a> {
             Some(ch) if !Category::is_delimiter(ch) => {
                 let _ = self.read();
                 let end_pos = self.source.position();
-                return context.error_with_suffix(
-                    LexicalError::UnexpectedCharAfterNumeric(ch),
-                    String::from(ch),
-                    end_pos,
-                );
+                return Err(context.error(LexicalError::UnexpectedCharAfterNumeric(ch), end_pos));
             }
             _ => {}
         }
@@ -441,7 +428,7 @@ impl<'a> Lexer<'a> {
         let context = ReadContext::with_prefix(start_pos, String::from(ch));
         let end_pos = self.source.position();
 
-        context.error(LexicalError::UnexpectedChar(ch), end_pos)
+        Err(context.error(LexicalError::UnexpectedChar(ch), end_pos))
     }
 
     /// Debug verification to ensure functions are called with correct values
@@ -477,39 +464,52 @@ impl<'a> Lexer<'a> {
     }
 
     /// Handler for lexical errors with different recovery strategies
-    fn advance_lexical_error(&mut self, err: &mut RatError) -> Result<Token, RatError> {
-        let recovery = Recovery::from_error(err);
-        let partial = &mut err.value;
-        let opener = partial.chars().next().filter(|ch| matches!(ch, '\'' | '"'));
+    fn advance_lexical_error(&mut self, err: RatError) -> Token {
+        let ErrorKind::Lexical(kind) = &err.kind else {
+            unreachable!("lexer produced a non-lexical error");
+        };
+
+        let start_pos = err.span.start_pos;
+        let opener = self
+            .source
+            .slice(start_pos.offset..start_pos.offset + 1)
+            .and_then(|s| s.chars().next())
+            .filter(|ch| matches!(ch, '\'' | '"'));
+        let recovery = Recovery::from_error(kind, opener);
 
         while let Some(ch) = self.peek() {
-            if recovery.skips_escapes() {
-                if let Some(two) = self.peek_n(2) {
-                    let is_escaped_opener = match opener {
-                        Some('\'') => two == "\\'",
-                        Some('"') => two == "\\\"",
-                        _ => false,
-                    };
-                    if is_escaped_opener {
-                        self.read().map(|c| partial.push(c));
-                        self.read().map(|c| partial.push(c));
-                        continue;
-                    }
+            if recovery.skips_escapes()
+                && let Some(two) = self.peek_n(2)
+            {
+                let is_escaped_opener = match opener {
+                    Some('\'') => two == "\\'",
+                    Some('"') => two == "\\\"",
+                    _ => false,
+                };
+                if is_escaped_opener {
+                    self.read();
+                    self.read();
+                    continue;
                 }
             }
             if recovery.is_stop(ch) {
                 if recovery.consume_stop() && matches!(ch, '\'' | '"') {
-                    self.read().map(|c| partial.push(c));
+                    self.read();
                 }
                 break;
             }
-            self.read().map(|c| partial.push(c));
+            self.read();
         }
 
-        self.errors.push(err.clone());
-        err.span = Span::set(err.span.start_pos, self.source.position());
-        let token = Token::new(Category::Invalid, err.value.clone(), err.span);
-        Ok(token)
+        let end_pos = self.source.position();
+        let value = self
+            .source
+            .slice(start_pos.offset..end_pos.offset)
+            .unwrap_or_default()
+            .to_string();
+
+        self.errors.push(err);
+        Token::new(Category::Invalid, value, Span::set(start_pos, end_pos))
     }
 
     /// Helpers
@@ -554,7 +554,7 @@ impl<'a> Lexer<'a> {
         match self.peek() {
             Some('\n') | None => {
                 let end_pos = self.source.position();
-                context.error(kind, end_pos)
+                Err(context.error(kind, end_pos))
             }
             _ => Ok(()),
         }
@@ -573,7 +573,7 @@ impl<'a> Lexer<'a> {
             }
             None => {
                 let end_pos = self.source.position();
-                context.error(eof_error, end_pos)
+                Err(context.error(eof_error, end_pos))
             }
         }
     }
